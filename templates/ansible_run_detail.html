@@ -144,8 +144,16 @@ function toggleAutoScroll() {
 }
 
 function copyLog() {
-  navigator.clipboard.writeText(logEl.innerText).then(() => {
-    const btn = document.querySelector('[onclick="copyLog()"]');
+  const btn = document.querySelector('[onclick="copyLog()"]');
+  navigator.clipboard?.writeText(logEl.innerText).then(() => {
+    btn.textContent = '✓ Kopyalandı'; setTimeout(() => btn.textContent = '📋 Kopyala', 2000);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = logEl.innerText;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
     btn.textContent = '✓ Kopyalandı'; setTimeout(() => btn.textContent = '📋 Kopyala', 2000);
   });
 }

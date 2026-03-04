@@ -81,6 +81,52 @@ _job_lock     = threading.Lock()
 _scheduler    = None
 
 
+def _cron_describe(minute, hour, dom, month, dow):
+    """Cron ifadesini insan okunabilir Türkçe metne çevirir."""
+    try:
+        m  = str(minute or '*').strip()
+        h  = str(hour or '*').strip()
+        d  = str(dom or '*').strip()
+        mo = str(month or '*').strip()
+        dw = str(dow or '*').strip()
+
+        gun_adlari = {
+            '0': 'Pazar', '1': 'Pazartesi', '2': 'Salı', '3': 'Çarşamba',
+            '4': 'Perşembe', '5': 'Cuma', '6': 'Cumartesi', '7': 'Pazar',
+            '1-5': 'Hft içi', '0-4': 'Pzt-Per', '0,6': 'Hft sonu', '6,0': 'Hft sonu',
+        }
+        ay_adlari = {
+            '1': 'Oca', '2': 'Şub', '3': 'Mar', '4': 'Nis',
+            '5': 'May', '6': 'Haz', '7': 'Tem', '8': 'Ağu',
+            '9': 'Eyl', '10': 'Eki', '11': 'Kas', '12': 'Ara',
+        }
+
+        # Her X saatte bir: "0 */N * * *"
+        if h.startswith('*/') and m == '0' and d == '*' and mo == '*' and dw == '*':
+            return f'Her {h[2:]} saatte'
+        # Her X dakikada bir: "*/N * * * *"
+        if m.startswith('*/') and h == '*' and d == '*' and mo == '*' and dw == '*':
+            return f'Her {m[2:]} dakikada'
+        # Sabit saat — her gün
+        if m.isdigit() and h.isdigit() and d == '*' and mo == '*' and dw == '*':
+            return f'Her gün {h.zfill(2)}:{m.zfill(2)}'
+        # Sabit saat — belirli haftanın günü
+        if m.isdigit() and h.isdigit() and d == '*' and mo == '*' and dw in gun_adlari:
+            return f'Her {gun_adlari[dw]} {h.zfill(2)}:{m.zfill(2)}'
+        # Sabit saat — ayın belirli günü
+        if m.isdigit() and h.isdigit() and d.isdigit() and mo == '*' and dw == '*':
+            return f'Her ay {d}. gün {h.zfill(2)}:{m.zfill(2)}'
+        # Sabit saat — belirli ay ve gün
+        if m.isdigit() and h.isdigit() and d.isdigit() and mo in ay_adlari and dw == '*':
+            return f'Her yıl {ay_adlari[mo]} {d}. gün {h.zfill(2)}:{m.zfill(2)}'
+        return f'{m} {h} {d} {mo} {dw}'
+    except Exception:
+        return ''
+
+
+app.jinja_env.globals['_cron_describe'] = _cron_describe
+
+
 @app.template_filter('calc_duration')
 def calc_duration_filter(started_at, finished_at):
     """İki tarih string'i arasındaki süreyi insan okunabilir formatta döner."""
@@ -100,7 +146,7 @@ def calc_duration_filter(started_at, finished_at):
         else:
             h = secs // 3600
             m = (secs % 3600) // 60
-            return f'{h}s {m}d'
+            return f'{h}h {m}m'
     except Exception:
         return '-'
 
@@ -4204,7 +4250,12 @@ def api_ansible_ping_host():
     if not _ansible_check():
         return jsonify({'ok': False, 'msg': 'Ansible kurulu değil.'})
 
-    import tempfile, yaml as _yaml
+    import tempfile
+    try:
+        import yaml as _yaml
+        _has_yaml = True
+    except ImportError:
+        _has_yaml = False
 
     # Inventory değişkenleri — _generate_inventory ile aynı mantık
     host = dict(host)
@@ -4244,9 +4295,13 @@ def api_ansible_ping_host():
 
     inv_dict = {'all': {'hosts': {host['name']: hvars}}}
 
-    try:
-        inv_str = _yaml.dump(inv_dict, default_flow_style=False, allow_unicode=True)
-    except Exception:
+    if _has_yaml:
+        try:
+            inv_str = _yaml.dump(inv_dict, default_flow_style=False, allow_unicode=True)
+        except Exception:
+            _has_yaml = False
+
+    if not _has_yaml:
         # fallback INI format
         inv_str = f"[all]\n{host['name']}"
         for k, v in hvars.items():

@@ -1,0 +1,12 @@
+---
+- name: Disk Kullanım Kontrolü
+  hosts: all
+  become: yes
+  tasks:
+    - name: Disk durumu
+      command: df -h /
+      register: disk_info
+      changed_when: false
+    - name: Sonucu göster
+      debug:
+        var: disk_info.stdout_lines

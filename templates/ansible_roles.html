@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Ansible — Roller{% endblock %}
+{% block topbar_title %}🎭 Ansible Rolleri{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_dashboard') }}" class="btn btn-secondary btn-sm">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+
+<!-- SOL: ROL LİSTESİ -->
+<div>
+<div class="card">
+  <div class="card-header">
+    Mevcut Roller
+    <span class="badge badge-secondary">{{ roles|length }}</span>
+  </div>
+  {% if roles %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Ad</th><th>Açıklama</th><th>Dosyalar</th><th>Oluşturma</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for r in roles %}
+        <tr>
+          <td>
+            <a href="{{ url_for('ansible_role_edit', rid=r.id) }}" class="link fw-bold">
+              {{ r.name }}
+            </a>
+          </td>
+          <td class="text-muted" style="font-size:12px">{{ r.description or '—' }}</td>
+          <td class="text-muted font-mono" style="font-size:11px">
+            {{ r.file_count or '?' }}
+          </td>
+          <td class="text-muted" style="font-size:11px">
+            {{ (r.created_at or '—')[:10] }}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <a href="{{ url_for('ansible_role_edit', rid=r.id) }}"
+                 class="btn btn-outline btn-sm">Düzenle</a>
+              <button onclick="openConfirm('Rolü Sil',
+                '{{ r.name }} rolü ve tüm dosyaları silinecek!',
+                'del-role-{{ r.id }}')"
+                class="btn btn-danger btn-sm">Sil</button>
+              <form id="del-role-{{ r.id }}"
+                action="{{ url_for('ansible_role_delete', rid=r.id) }}"
+                method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:40px">
+    <div class="empty-icon">🎭</div>
+    <p>Henüz rol yok.</p>
+    <p class="text-muted" style="font-size:12px">
+      Sağ paneldeki formu kullanarak yeni rol oluşturun.
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Rol Yapısı Bilgisi -->
+<div class="card">
+  <div class="card-header">📖 Ansible Rol Yapısı</div>
+  <div class="card-body" style="font-size:12px;color:#8b949e">
+    <pre class="code-block" style="font-size:11px;max-height:220px">roles/
+└── &lt;rol_adı&gt;/
+    ├── tasks/
+    │   └── main.yml      ← Ana görevler
+    ├── handlers/
+    │   └── main.yml      ← Handler'lar
+    ├── vars/
+    │   └── main.yml      ← Sabit değişkenler
+    ├── defaults/
+    │   └── main.yml      ← Varsayılan değişkenler
+    ├── files/            ← Kopyalanacak dosyalar
+    ├── templates/        ← Jinja2 şablonları
+    └── meta/
+        └── main.yml      ← Bağımlılıklar</pre>
+    <p style="margin-top:10px">
+      Rolü playbooklarda şöyle kullanın:
+    </p>
+    <pre class="code-block" style="font-size:11px;max-height:80px">- hosts: linux
+  roles:
+    - rol_adı</pre>
+  </div>
+</div>
+</div>
+
+<!-- SAĞ: YENİ ROL FORMU -->
+<div>
+<div class="card">
+  <div class="card-header">➕ Yeni Rol Oluştur</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('ansible_role_add_go') }}">
+      <div class="form-group">
+        <label>Rol Adı <span class="req">*</span></label>
+        <input type="text" name="name" class="form-control"
+          placeholder="ör: webserver, database, common" required
+          pattern="[a-zA-Z0-9_\-]+"
+          title="Sadece harf, rakam, _ ve - kullanılabilir">
+        <div class="form-help">Küçük harf, rakam, alt çizgi ve tire</div>
+      </div>
+      <div class="form-group">
+        <label>Açıklama</label>
+        <input type="text" name="description" class="form-control"
+          placeholder="Bu rolün amacı...">
+      </div>
+      <button type="submit" class="btn btn-success" style="width:100%">
+        🎭 Oluştur ve Düzenle
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">💡 Rol Kullanım Örnekleri</div>
+  <div class="card-body" style="font-size:12px;color:#8b949e">
+    <p style="color:#c9d1d9;margin-bottom:8px"><strong>Playbook'ta Rol Kullanımı:</strong></p>
+    <pre class="code-block" style="font-size:11px;max-height:120px">---
+- name: Web Sunucularını Yapılandır
+  hosts: webservers
+  become: yes
+  roles:
+    - common
+    - webserver
+
+- name: DB Yapılandır
+  hosts: databases
+  become: yes
+  roles:
+    - common
+    - database</pre>
+
+    <p style="color:#c9d1d9;margin:12px 0 8px"><strong>Rol Değişkenleri:</strong></p>
+    <pre class="code-block" style="font-size:11px;max-height:80px">- name: Rol çalıştır (değişken geçir)
+  hosts: all
+  roles:
+    - role: webserver
+      vars:
+        http_port: 8080
+        server_name: prod</pre>
+  </div>
+</div>
+</div>
+
+</div>
+{% endblock %}

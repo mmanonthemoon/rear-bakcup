@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}İş #{{ job.id }}{% endblock %}
+{% block topbar_title %}📋 İş #{{ job.id }} — {{ job.server_label }}{% endblock %}
+{% block topbar_actions %}
+  {% if is_running %}
+  <form action="{{ url_for('job_cancel', jid=job.id) }}" method="post" style="display:inline">
+    <button type="submit" class="btn btn-warning btn-sm">⏹ İptal Et</button>
+  </form>
+  {% endif %}
+  <a href="{{ url_for('jobs_list') }}" class="btn btn-secondary btn-sm">← Geri</a>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('jobs_list') }}">İşler</a><span>›</span>
+  <a href="{{ url_for('server_detail', sid=job.server_id) }}">{{ job.server_label }}</a><span>›</span>
+  <span>İş #{{ job.id }}</span>
+</div>
+
+<div class="grid-2" style="margin-bottom:0">
+<div class="card">
+  <div class="card-header">İş Bilgileri</div>
+  <div class="card-body" style="padding:14px">
+    <ul class="info-list">
+      <li><span class="info-key">İş #</span><span class="info-val fw-bold">#{{ job.id }}</span></li>
+      <li><span class="info-key">Sunucu</span>
+        <span class="info-val">
+          <a href="{{ url_for('server_detail', sid=job.server_id) }}" class="link">{{ job.server_label }}</a>
+          <span class="font-mono text-muted" style="font-size:11px"> {{ job.ip_address }}</span>
+        </span>
+      </li>
+      <li><span class="info-key">Hostname</span><span class="info-val font-mono" style="font-size:12px">{{ job.hostname }}</span></li>
+      <li><span class="info-key">Tür</span><span class="info-val">
+        {% if job.job_type == 'backup' %}<span class="badge badge-info">💾 Yedek</span>
+        {% elif job.job_type == 'install' %}<span class="badge badge-secondary">📦 Kurulum</span>
+        {% elif job.job_type == 'configure' %}<span class="badge badge-warning">⚙️ Config</span>
+        {% else %}<span class="badge badge-secondary">{{ job.job_type }}</span>{% endif %}
+      </span></li>
+      <li><span class="info-key">Tetikleyen</span><span class="info-val">
+        {% if job.triggered_by == 'scheduler' %}<span class="badge badge-teal">⏰ Zamanlayıcı</span>
+        {% else %}<span class="badge badge-secondary">👤 Manuel</span>{% endif %}
+      </span></li>
+      <li><span class="info-key">Durum</span><span class="info-val" id="statusBadge">
+        {% if job.status == 'success' %}<span class="badge badge-success">✓ Başarılı</span>
+        {% elif job.status == 'failed' %}<span class="badge badge-danger">✗ Başarısız</span>
+        {% elif job.status in ('running','pending') %}<span class="badge badge-running">⚡ Çalışıyor</span>
+        {% elif job.status == 'cancelled' %}<span class="badge badge-warning">⏹ İptal</span>
+        {% else %}<span class="badge badge-secondary">{{ job.status }}</span>{% endif %}
+      </span></li>
+      <li><span class="info-key">Başlangıç</span><span class="info-val text-muted">{{ job.started_at or '-' }}</span></li>
+      <li><span class="info-key">Bitiş</span><span class="info-val text-muted" id="finishedAt">{{ job.finished_at or '-' }}</span></li>
+      {% if job.backup_size %}<li><span class="info-key">Yedek Boyutu</span><span class="info-val text-success fw-bold">{{ job.backup_size }}</span></li>{% endif %}
+      {% if job.iso_path %}<li><span class="info-key">ISO Yolu</span><span class="info-val font-mono" style="font-size:11px">{{ job.iso_path }}</span></li>{% endif %}
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    {% if job.job_type == 'backup' %}💡 Kurtarma Rehberi{% else %}💡 Bilgi{% endif %}
+  </div>
+  <div class="card-body" style="font-size:12px;color:#8b949e;line-height:1.9">
+    {% if job.job_type == 'backup' %}
+    <strong style="color:#f0f6ff">Kurtarma Adımları:</strong><br>
+    <ol style="padding-left:16px;margin-top:6px">
+      <li>ISO'yu USB/DVD'ye yaz veya IPMI ile mount et</li>
+      <li>Hedef sunucuyu ISO'dan başlat</li>
+      <li>Kurtarma menüsünden <strong>Recover</strong> seç</li>
+      <li>Farklı disk boyutu: MIGRATION_MODE + AUTORESIZE devreye girer</li>
+      <li><code>rear recover</code> komutunu onayla</li>
+    </ol>
+    <hr class="divider">
+    <strong style="color:#f0f6ff">ISO Konumu:</strong><br>
+    <code style="color:#79c0ff;font-size:11px">/srv/rear-backups/{{ job.hostname }}/</code>
+    {% elif job.job_type == 'install' %}
+    Kurulum sonrası: <strong style="color:#f0f6ff">Yapılandır → Yedekle</strong>
+    {% elif job.job_type == 'configure' %}
+    Yapılandırma sonrası: <strong style="color:#f0f6ff">Tam Yedek Al</strong> ile test edin
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<div class="card" style="margin-top:18px">
+  <div class="card-header">
+    <div class="flex-center">
+      <span>📄 Log Çıktısı</span>
+      {% if is_running %}
+      <span class="spinner"></span>
+      <span style="font-size:12px;color:#f0883e">Canlı izleniyor...</span>
+      {% endif %}
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary btn-sm" onclick="toggleWrap()">↔ Kaydır</button>
+      <button class="btn btn-secondary btn-sm" onclick="logBlock.scrollTop=logBlock.scrollHeight">⬇ Sona</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyLog()">📋 Kopyala</button>
+    </div>
+  </div>
+  <pre id="logBlock" class="log-block" style="border-radius:0;border:none">{{ job.log_output or '(Henüz log yok...)' }}</pre>
+</div>
+
+<div style="text-align:right;margin-top:6px">
+  <button onclick="openConfirm('Sil','#{{ job.id }} iş kaydı silinecek.','delJobForm')"
+    class="btn btn-danger btn-sm">🗑️ Kaydı Sil</button>
+  <form id="delJobForm" action="{{ url_for('job_delete', jid=job.id) }}" method="post" style="display:none"></form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const jobId    = {{ job.id }};
+const isRun    = {{ 'true' if is_running else 'false' }};
+const logBlock = document.getElementById('logBlock');
+let pollTimer  = null;
+
+function toggleWrap() {
+  const ws = logBlock.style.whiteSpace;
+  logBlock.style.whiteSpace = ws === 'pre' ? 'pre-wrap' : 'pre';
+  logBlock.style.wordBreak  = ws === 'pre' ? 'break-all' : 'normal';
+}
+function copyLog() {
+  navigator.clipboard?.writeText(logBlock.textContent)
+    .then(()=>alert('Kopyalandı!'))
+    .catch(()=>{ /* fallback */ });
+}
+function updateStatus(s) {
+  const m = {
+    'success':  '<span class="badge badge-success">✓ Başarılı</span>',
+    'failed':   '<span class="badge badge-danger">✗ Başarısız</span>',
+    'running':  '<span class="badge badge-running">⚡ Çalışıyor</span>',
+    'cancelled':'<span class="badge badge-warning">⏹ İptal</span>',
+    'pending':  '<span class="badge badge-secondary">⏳ Bekliyor</span>',
+  };
+  document.getElementById('statusBadge').innerHTML = m[s] || s;
+}
+function poll() {
+  fetch('/jobs/' + jobId + '/log')
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d=>{
+      const atBot = logBlock.scrollHeight - logBlock.scrollTop <= logBlock.clientHeight + 60;
+      if (d.log) logBlock.textContent = d.log;
+      if (atBot) logBlock.scrollTop = logBlock.scrollHeight;
+      updateStatus(d.status);
+      if (!d.running) clearInterval(pollTimer);
+    })
+    .catch(()=>{});
+}
+if (isRun) {
+  logBlock.scrollTop = logBlock.scrollHeight;
+  pollTimer = setInterval(poll, 2000);
+} else {
+  logBlock.scrollTop = logBlock.scrollHeight;
+}
+</script>
+{% endblock %}

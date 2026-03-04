@@ -1,0 +1,640 @@
+{% extends "base.html" %}
+{% block title %}Ayarlar{% endblock %}
+{% block topbar_title %}⚙️ Sistem Ayarları{% endblock %}
+
+{% block content %}
+<!-- SEKME NAVIGASYONU -->
+<div class="tabs">
+  <a href="{{ url_for('settings_page', tab='general') }}"
+     class="tab-link {% if active_tab == 'general' %}active{% endif %}">⚙️ Genel & NFS</a>
+  <a href="{{ url_for('settings_page', tab='ad') }}"
+     class="tab-link {% if active_tab == 'ad' %}active{% endif %}">🏢 Active Directory</a>
+  <a href="{{ url_for('settings_page', tab='offline') }}"
+     class="tab-link {% if active_tab == 'offline' %}active{% endif %}">📦 Offline Paketler</a>
+  <a href="{{ url_for('settings_page', tab='tools') }}"
+     class="tab-link {% if active_tab == 'tools' %}active{% endif %}">🔧 Araçlar</a>
+</div>
+
+<!-- ══════════════════════ GENEL & NFS ══════════════════════ -->
+{% if active_tab == 'general' %}
+<form method="post">
+  <input type="hidden" name="tab" value="general">
+  <div class="grid-2">
+    <!-- SOL -->
+    <div>
+      <div class="card">
+        <div class="card-header">🌐 Ağ & Merkezi Sunucu</div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Merkezi Sunucu IP <span class="req">*</span></label>
+            <input type="text" name="central_ip" class="form-control"
+              value="{{ settings.central_ip }}" required>
+            <div class="form-help">Bu sunucunun yönetim arayüzü IP adresi (SSH için kullanılır)</div>
+          </div>
+
+          <div class="form-group">
+            <label>Oturum Zaman Aşımı (dakika)</label>
+            <input type="number" name="session_timeout" class="form-control"
+              value="{{ settings.session_timeout }}" min="5" max="2880">
+            <div class="form-help">Web panel oturum süresi</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">📂 NFS Yapılandırması</div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>NFS Modu</label>
+            <select name="nfs_mode" class="form-select" id="nfsModeSelect" onchange="toggleNFSMode()">
+              <option value="central" {% if settings.nfs_mode != 'separate' %}selected{% endif %}>
+                🖥️ Merkezi Sunucu (bu sunucu NFS sağlayıcı)
+              </option>
+              <option value="separate" {% if settings.nfs_mode == 'separate' %}selected{% endif %}>
+                🗄️ Ayrı NFS Sunucusu
+              </option>
+            </select>
+            <div class="form-help">Yedeklerin yazılacağı NFS sunucusunu seçin</div>
+          </div>
+
+          <div id="separateNfsFields" style="display:none">
+            <div class="alert alert-info" style="font-size:12px">
+              Ayrı NFS sunucusu seçildi. NFS sunucusunun zaten yapılandırılmış ve
+              erişilebilir olması gerekir. <strong>NFS Kur butonu bu modda çalışmaz.</strong>
+            </div>
+            <div class="form-group">
+              <label>NFS Sunucusu IP / Hostname</label>
+              <input type="text" name="nfs_server_ip" class="form-control"
+                value="{{ settings.nfs_server_ip }}"
+                placeholder="192.168.1.50 veya nfsserver.local">
+              <div class="form-help">Hedef sunucular bu adrese NFS mount yapacak</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>NFS Export Yolu</label>
+            <input type="text" name="nfs_export_path" class="form-control"
+              value="{{ settings.nfs_export_path }}">
+            <div class="form-help">
+              Merkezi modda: Bu sunucuda oluşturulacak dizin<br>
+              Ayrı NFS modunda: NFS sunucusunda var olan paylaşım yolu
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>NFS Export Seçenekleri</label>
+            <input type="text" name="nfs_options" class="form-control"
+              value="{{ settings.nfs_options }}">
+            <div class="form-help">Sadece merkezi mod için /etc/exports'a yazılır</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SAĞ -->
+    <div>
+      <div class="card">
+        <div class="card-header">🛡️ ReaR Varsayılanları</div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Çıktı Formatı</label>
+              <select name="rear_output" class="form-select">
+                <option value="ISO" {% if settings.rear_output == 'ISO' %}selected{% endif %}>ISO (Önerilen)</option>
+                <option value="PXE" {% if settings.rear_output == 'PXE' %}selected{% endif %}>PXE</option>
+                <option value="RAWDISK" {% if settings.rear_output == 'RAWDISK' %}selected{% endif %}>RAW Disk</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Yedekleme Yöntemi</label>
+              <select name="rear_backup" class="form-select">
+                <option value="NETFS" {% if settings.rear_backup == 'NETFS' %}selected{% endif %}>NETFS/NFS</option>
+                <option value="RSYNC" {% if settings.rear_backup == 'RSYNC' %}selected{% endif %}>RSYNC</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <div class="form-check">
+                <input type="checkbox" name="autoresize" id="autoResz" value="1"
+                  {% if settings.autoresize == '1' %}checked{% endif %}>
+                <label for="autoResz" style="margin-bottom:0">Otomatik Disk Boyutlandırma</label>
+              </div>
+              <div class="form-help" style="margin-left:22px">AUTORESIZE_PARTITIONS</div>
+            </div>
+            <div class="form-group">
+              <div class="form-check">
+                <input type="checkbox" name="migration_mode" id="migMode" value="1"
+                  {% if settings.migration_mode == '1' %}checked{% endif %}>
+                <label for="migMode" style="margin-bottom:0">Migration Mode</label>
+              </div>
+              <div class="form-help" style="margin-left:22px">Farklı donanım kurtarma</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">🚫 Global Hariç Dizinler</div>
+        <div class="card-body">
+          <p class="text-muted" style="font-size:12px;margin-bottom:10px">
+            Tüm sunucular için ortak hariç tutulacak dizinler.
+            Sunucuya özel dizinler sunucu formunda ayrıca belirtilebilir.
+            Her iki liste ReaR config dosyasında birleştirilir.
+          </p>
+          <div class="form-group">
+            <textarea name="global_exclude_dirs" class="form-control" rows="6"
+              placeholder="/data/cache/*&#10;/var/log/archive/*&#10;/opt/large-files/*">{{ settings.global_exclude_dirs }}</textarea>
+            <div class="form-help">Her satıra bir yol. Glob (* ? []) desteklenir.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>SSH Anahtar Yolu</label>
+        <input type="text" name="ssh_key_path" class="form-control"
+          value="{{ settings.ssh_key_path }}">
+      </div>
+
+      <div class="form-group">
+        <label>Yedek Saklama Süresi (gün)</label>
+        <input type="number" name="retention_days" class="form-control"
+          value="{{ settings.retention_days }}" min="1" max="365">
+        <div class="form-help">Referans amaçlı (manuel temizleme)</div>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">💾 Ayarları Kaydet</button>
+</form>
+
+<!-- MEVCUT NFS BİLGİSİ -->
+{% if du_info %}
+<div class="card" style="margin-top:18px">
+  <div class="card-header">📊 Disk Kullanımı</div>
+  <div class="card-body"><pre class="code-block" style="max-height:100px">{{ du_info }}</pre></div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════ AD AYARLARI ══════════════════════ -->
+{% elif active_tab == 'ad' %}
+<div class="grid-2">
+<div>
+  <form method="post">
+    <input type="hidden" name="tab" value="ad">
+    <div class="card">
+      <div class="card-header">🏢 Active Directory LDAP Ayarları</div>
+      <div class="card-body">
+        {% if not has_ldap %}
+        <div class="alert alert-warning">
+          ⚠️ <strong>ldap3</strong> modülü kurulu değil. AD doğrulama çalışmayacak.
+          <br>Kurulum: <code>pip install ldap3</code>
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+          <div class="form-check">
+            <input type="checkbox" name="ad_enabled" id="adEnabled" value="1"
+              {% if settings.ad_enabled == '1' %}checked{% endif %}>
+            <label for="adEnabled" style="margin-bottom:0">
+              <strong>Active Directory Kimlik Doğrulamayı Etkinleştir</strong>
+            </label>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>AD / LDAP Sunucusu</label>
+            <input type="text" name="ad_server" class="form-control"
+              value="{{ settings.ad_server }}"
+              placeholder="192.168.1.10 veya dc01.example.com">
+          </div>
+          <div class="form-group">
+            <label>LDAP Port</label>
+            <input type="number" name="ad_port" class="form-control"
+              value="{{ settings.ad_port }}" placeholder="389">
+            <div class="form-help">389 (LDAP) veya 636 (LDAPS)</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>AD Domain</label>
+            <input type="text" name="ad_domain" class="form-control"
+              value="{{ settings.ad_domain }}" placeholder="example.com">
+          </div>
+          <div class="form-group">
+            <label>Base DN</label>
+            <input type="text" name="ad_base_dn" class="form-control"
+              value="{{ settings.ad_base_dn }}" placeholder="DC=example,DC=com">
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="font-size:12px;font-weight:600;color:#8b949e;margin-bottom:10px">
+          Bind Kullanıcısı (Kullanıcı arama için, opsiyonel)
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Bind Kullanıcı</label>
+            <input type="text" name="ad_bind_user" class="form-control"
+              value="{{ settings.ad_bind_user }}"
+              placeholder="svc-rear@example.com veya sAMAccountName">
+            <div class="form-help">Boş bırakılırsa giriş yapan kullanıcı ile arama yapılır</div>
+          </div>
+          <div class="form-group">
+            <label>Bind Şifresi</label>
+            <input type="password" name="ad_bind_password" class="form-control"
+              value="{{ settings.ad_bind_password }}" placeholder="Bind kullanıcısı şifresi">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Kullanıcı Arama Filtresi</label>
+          <input type="text" name="ad_user_filter" class="form-control"
+            value="{{ settings.ad_user_filter }}">
+          <div class="form-help">
+            <code>{username}</code> yerini giriş yapan kullanıcı adı alır.
+            Örnek: <code>(sAMAccountName={username})</code>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="font-size:12px;font-weight:600;color:#8b949e;margin-bottom:10px">
+          Yetki Grupları
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Yönetici Grubu (Admin)</label>
+            <input type="text" name="ad_admin_group" class="form-control"
+              value="{{ settings.ad_admin_group }}" placeholder="ReaR-Admins">
+            <div class="form-help">Bu gruptaki AD kullanıcıları yönetici olur</div>
+          </div>
+          <div class="form-group">
+            <label>Kullanıcı Grubu (User)</label>
+            <input type="text" name="ad_user_group" class="form-control"
+              value="{{ settings.ad_user_group }}" placeholder="ReaR-Users">
+            <div class="form-help">Bu gruptaki AD kullanıcıları standart kullanıcı olur</div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">💾 AD Ayarlarını Kaydet</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div>
+  <!-- AD BAĞLANTI TESTİ -->
+  <div class="card">
+    <div class="card-header">🧪 AD Bağlantı Testi</div>
+    <div class="card-body">
+      <p class="text-muted" style="font-size:13px;margin-bottom:12px">
+        Kaydetmeden önce AD bağlantısını ve kullanıcı doğrulamayı test edin.
+      </p>
+      <div class="form-group">
+        <label>Test Kullanıcı Adı</label>
+        <input type="text" id="testADUser" class="form-control" placeholder="jdoe">
+      </div>
+      <div class="form-group">
+        <label>Test Şifre</label>
+        <input type="password" id="testADPass" class="form-control" placeholder="Şifre">
+      </div>
+      <button class="btn btn-primary" onclick="testAD()">🧪 Test Et</button>
+      <div id="adTestResult" style="margin-top:12px;display:none" class="code-block"></div>
+    </div>
+  </div>
+
+  <!-- AD HAKKINDA BİLGİ -->
+  <div class="card">
+    <div class="card-header">ℹ️ AD Kimlik Doğrulama Hakkında</div>
+    <div class="card-body" style="font-size:12px;color:#8b949e;line-height:1.9">
+      <strong style="color:#f0f6ff">Nasıl Çalışır:</strong><br>
+      1. Kullanıcı AD kullanıcı adı ve şifresiyle giriş yapar<br>
+      2. Belirtilen LDAP sunucusuna bind yapılır<br>
+      3. <code>ad_user_filter</code> ile kullanıcı aranır<br>
+      4. Kullanıcı adı/şifre doğrulanır<br>
+      5. <code>memberOf</code> gruba göre rol atanır<br>
+      6. İlk girişte kullanıcı DB'ye kaydedilir<br>
+      <br>
+      <strong style="color:#f0f6ff">Notlar:</strong><br>
+      • Yerleşik <code>admin</code> hesabı her zaman yerel auth kullanır<br>
+      • AD kullanıcıları ikinci girişte DB'den güncellenir<br>
+      • Grup üyeliği her girişte kontrol edilir
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════ OFFLİNE PAKETLER ══════════════════════ -->
+{% elif active_tab == 'offline' %}
+
+<div class="alert alert-info">
+  <strong>📦 Ubuntu Offline Kurulum Nasıl Çalışır?</strong><br>
+  İnternet erişimi olmayan Ubuntu sunucularına ReaR kurabilmek için gerekli tüm
+  <code>.deb</code> paketleri önceden indirilerek merkezi sunucuda saklanır.
+  ReaR kurulum adımında bu paketler otomatik olarak hedef sunucuya kopyalanıp
+  kurulur — <strong>internet gerekmez.</strong>
+</div>
+
+<!-- PAKET DURUM TABLOSU -->
+<div class="card">
+  <div class="card-header">
+    📦 Mevcut Offline Paket Setleri
+    <span class="text-muted" style="font-size:11px">{{ offline_pkg_dir }}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ubuntu Sürümü</th>
+          <th>Codename</th>
+          <th>Durum</th>
+          <th>Paket Sayısı</th>
+          <th>Boyut</th>
+          <th>Hazırlanma Tarihi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for codename, ver in ubuntu_codenames.items() %}
+        {% set pkg = offline_pkg_status.get(codename, {}) %}
+        <tr>
+          <td class="fw-bold">Ubuntu {{ ver }}</td>
+          <td class="font-mono text-muted" style="font-size:12px">{{ codename }}</td>
+          <td>
+            {% if pkg.get('ready') %}
+              <span class="badge badge-success">✓ Hazır</span>
+            {% else %}
+              <span class="badge badge-danger">✗ Eksik</span>
+            {% endif %}
+          </td>
+          <td class="text-muted" style="font-size:13px">
+            {{ pkg.count if pkg.get('ready') else '—' }}
+          </td>
+          <td class="font-mono text-muted" style="font-size:12px">
+            {{ pkg.size if pkg.get('ready') else '—' }}
+          </td>
+          <td class="text-muted" style="font-size:11px">
+            {% if pkg.get('ready') and pkg.get('meta') %}
+              {{ (pkg.meta.get('prepared_at','') or '')[:10] }}
+              {% if pkg.meta.get('prepared_by') %}
+                <span class="text-muted">({{ pkg.meta.prepared_by[:20] }})</span>
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- HAZIRLIK ADIMLARI -->
+<div class="grid-2">
+<div class="card">
+  <div class="card-header">🚀 Offline Paket Hazırlama — Adımlar</div>
+  <div class="card-body" style="font-size:13px;line-height:2">
+    <ol style="padding-left:18px;color:#c9d1d9">
+      <li>
+        <strong>İnternet erişimi olan bir Ubuntu makinesinde</strong>
+        (VM, geçici sunucu veya iş istasyonu)
+      </li>
+      <li>
+        Betik dosyasını kopyalayın veya merkezi sunucudan alın:
+        <pre class="code-block" style="margin-top:6px;max-height:60px;font-size:11px">scp root@&lt;merkezi_ip&gt;:/opt/rear-manager/prepare_offline_packages.sh .</pre>
+      </li>
+      <li>
+        <strong>Mevcut Ubuntu sürümü için</strong> paketleri indirin:
+        <pre class="code-block" style="margin-top:6px;max-height:60px;font-size:11px">sudo bash prepare_offline_packages.sh</pre>
+        Her Ubuntu sürümü (20, 22, 24, 25) için ilgili sürümün VM'inde çalıştırın.
+      </li>
+      <li>
+        <strong>Docker varsa tüm sürümleri tek seferde:</strong>
+        <pre class="code-block" style="margin-top:6px;max-height:60px;font-size:11px">sudo bash prepare_offline_packages.sh --all-docker</pre>
+      </li>
+      <li>
+        Paket dizinini merkezi sunucuya kopyalayın:
+        <pre class="code-block" style="margin-top:6px;max-height:60px;font-size:11px">rsync -avz /opt/rear-manager/offline-packages/ \
+  root@{{ settings.central_ip }}:{{ offline_pkg_dir }}/</pre>
+      </li>
+      <li>
+        Bu sayfayı yenileyin → Durum <span class="badge badge-success">✓ Hazır</span> olmalı
+      </li>
+    </ol>
+  </div>
+</div>
+
+<div>
+<div class="card">
+  <div class="card-header">⚡ Kurulum Öncelik Sırası</div>
+  <div class="card-body" style="font-size:12px;color:#8b949e;line-height:1.9">
+    <strong style="color:#f0f6ff">Ubuntu hedef sunucularda:</strong>
+    <ol style="padding-left:16px;margin-top:8px;color:#c9d1d9">
+      <li>
+        <span class="badge badge-success" style="font-size:10px">1. Önce</span>
+        Offline paket seti kontrol edilir
+      </li>
+      <li>
+        <span class="badge badge-info" style="font-size:10px">2. Sonra</span>
+        Paketler SFTP ile hedef sunucuya kopyalanır
+      </li>
+      <li>
+        <span class="badge badge-info" style="font-size:10px">3. Son</span>
+        <code>dpkg -i</code> ile offline kurulum yapılır
+      </li>
+    </ol>
+    <hr class="divider">
+    <strong style="color:#f0f6ff">Offline paket yoksa:</strong><br>
+    <span class="text-warning">⚠️ Uyarı verilir</span> ve
+    <code>apt-get</code> ile online kurulum denenir.
+    İnternet yoksa bu da başarısız olur.<br>
+    <hr class="divider">
+    <strong style="color:#f0f6ff">Diğer dağıtımlar:</strong><br>
+    RHEL, CentOS, SUSE vb. için offline paket desteği yoktur.
+    Bu sistemlere ReaR'ı elle kurun, ardından
+    <strong>"Yapılandır"</strong> adımından devam edin.
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📁 Paket Dizin Yapısı</div>
+  <div class="card-body">
+    <pre class="code-block" style="max-height:160px;font-size:11px">{{ offline_pkg_dir }}/
+├── focal/          ← Ubuntu 20.04
+│   ├── rear_*.deb
+│   ├── nfs-common_*.deb
+│   ├── ...         ({{ offline_pkg_status.get('focal',{}).get('count',0) }} paket)
+│   └── meta.json
+├── jammy/          ← Ubuntu 22.04
+│   └── ...         ({{ offline_pkg_status.get('jammy',{}).get('count',0) }} paket)
+├── noble/          ← Ubuntu 24.04
+│   └── ...         ({{ offline_pkg_status.get('noble',{}).get('count',0) }} paket)
+└── plucky/         ← Ubuntu 25.04
+    └── ...         ({{ offline_pkg_status.get('plucky',{}).get('count',0) }} paket)</pre>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ══════════════════════ ARAÇLAR ══════════════════════ -->
+{% elif active_tab == 'tools' %}
+<div class="grid-2">
+<div>
+  <!-- NFS KURULUM -->
+  <div class="card">
+    <div class="card-header">🗂️ NFS Server Kurulumu (Merkezi Mod)</div>
+    <div class="card-body">
+      <p class="text-muted" style="font-size:13px;margin-bottom:10px">
+        Bu sunucuya NFS server kurar ve <code>/etc/exports</code>'u yapılandırır.
+        <strong>Sadece merkezi NFS modunda kullanın.</strong>
+      </p>
+      {% if settings.nfs_mode == 'separate' %}
+      <div class="alert alert-warning" style="font-size:12px">
+        ⚠️ Ayrı NFS sunucusu modu etkin. Bu buton etkisizdir.
+      </div>
+      {% else %}
+      <form action="{{ url_for('setup_nfs') }}" method="post">
+        <button type="submit" class="btn btn-success">🗂️ NFS Kur & Yapılandır</button>
+      </form>
+      {% endif %}
+
+      {% if du_info %}
+      <hr class="divider">
+      <div style="font-size:12px;color:#8b949e;margin-bottom:6px">Disk Kullanımı:</div>
+      <pre class="code-block" style="max-height:80px;margin:0">{{ du_info }}</pre>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- SSH ANAHTARI -->
+  <div class="card">
+    <div class="card-header">🔑 SSH Anahtar Yönetimi</div>
+    <div class="card-body">
+      <p class="text-muted" style="font-size:13px;margin-bottom:10px">
+        Hedef sunuculara şifresiz bağlantı için SSH anahtar çifti oluşturun.
+      </p>
+      <form action="{{ url_for('generate_ssh_key') }}" method="post" style="margin-bottom:10px">
+        <button type="submit" class="btn btn-primary">🔑 Anahtar Çifti Oluştur</button>
+      </form>
+      <div class="code-block" style="max-height:60px">
+        Private: {{ settings.ssh_key_path }}<br>
+        Public : {{ settings.ssh_key_path }}.pub
+      </div>
+      <p class="text-muted" style="font-size:12px;margin-top:8px">
+        Sunucu detay sayfasından her sunucuya ayrı ayrı kopyalayabilirsiniz.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div>
+  <!-- ZAMANLAYICI DURUMU -->
+  <div class="card">
+    <div class="card-header">⏰ Zamanlayıcı Durumu</div>
+    <div class="card-body">
+      {% if has_scheduler %}
+      <div class="alert alert-success" style="font-size:12px;margin-bottom:10px">
+        ✓ APScheduler aktif
+      </div>
+      <div id="schedStatusList" class="code-block" style="max-height:200px">
+        Yükleniyor...
+      </div>
+      {% else %}
+      <div class="alert alert-warning">
+        ⚠️ APScheduler kurulu değil. Zamanlanmış yedekleme çalışmaz.<br>
+        <code>pip install apscheduler</code>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- BİLGİ PANELİ -->
+  <div class="card">
+    <div class="card-header">ℹ️ Mimari</div>
+    <div class="card-body" style="font-size:12px;color:#8b949e;line-height:1.9">
+      <strong style="color:#f0f6ff">NFS Modu: {{ settings.nfs_mode | upper }}</strong><br>
+      {% if settings.nfs_mode == 'separate' %}
+      NFS Sunucusu: <code style="color:#79c0ff">{{ settings.nfs_server_ip or '?' }}</code><br>
+      {% else %}
+      NFS Sunucusu: <code style="color:#79c0ff">{{ settings.central_ip }} (bu sunucu)</code><br>
+      {% endif %}
+      Export Yolu: <code style="color:#79c0ff">{{ settings.nfs_export_path }}</code><br>
+      <br>
+      <strong style="color:#f0f6ff">Yedek URL Formatı:</strong><br>
+      <code style="color:#79c0ff">
+        nfs://{% if settings.nfs_mode == 'separate' and settings.nfs_server_ip %}{{ settings.nfs_server_ip }}{% else %}{{ settings.central_ip }}{% endif %}{{ settings.nfs_export_path }}/&lt;hostname&gt;
+      </code>
+    </div>
+  </div>
+</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// NFS mode toggle
+function toggleNFSMode() {
+  const sep = document.getElementById('separateNfsFields');
+  if (sep) {
+    const mode = document.getElementById('nfsModeSelect');
+    if (mode) sep.style.display = mode.value === 'separate' ? 'block' : 'none';
+  }
+}
+if (document.getElementById('nfsModeSelect')) {
+  toggleNFSMode();
+}
+
+// AD test
+function testAD() {
+  const user = document.getElementById('testADUser')?.value;
+  const pass = document.getElementById('testADPass')?.value;
+  const res  = document.getElementById('adTestResult');
+  if (!res) return;
+  res.style.display = 'block';
+  res.style.color   = '#8b949e';
+  res.textContent   = '⏳ Test ediliyor...';
+
+  const fd = new FormData();
+  fd.append('test_username', user);
+  fd.append('test_password', pass);
+
+  fetch('/settings/test-ad', {method:'POST', body:fd})
+    .then(r => {
+      if (r.status === 401) throw new Error('Oturum süresi doldu, sayfayı yenileyin.');
+      return r.json();
+    })
+    .then(d=>{
+      res.style.color = d.ok ? '#3fb950' : '#f85149';
+      res.textContent = d.ok
+        ? `✓ Başarılı!\nKullanıcı: ${d.full_name}\nRol: ${d.role}`
+        : `✗ Başarısız: ${d.msg}`;
+    })
+    .catch(e=>{ res.style.color='#f85149'; res.textContent='Hata: '+e; });
+}
+
+// Zamanlayıcı durumu
+{% if active_tab == 'tools' and has_scheduler %}
+fetch('/api/schedules-status')
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d=>{
+  const el = document.getElementById('schedStatusList');
+  if (!el) return;
+  if (d.jobs.length === 0) {
+    el.textContent = 'Aktif zamanlama yok.';
+  } else {
+    el.textContent = d.jobs.map(j =>
+      `${j.id}: sonraki = ${j.next_run || '-'}`
+    ).join('\n');
+  }
+}).catch(()=>{
+  const el = document.getElementById('schedStatusList');
+  if (el) el.textContent = 'Yüklenemedi.';
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block topbar_title %}📊 Dashboard{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('server_add') }}" class="btn btn-primary btn-sm">➕ Sunucu Ekle</a>
+{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card stat-blue"><div class="stat-icon">🖥️</div><div class="stat-val">{{ stats.total_servers }}</div><div class="stat-label">Toplam Sunucu</div></div>
+  <div class="stat-card stat-green"><div class="stat-icon">📦</div><div class="stat-val">{{ stats.installed_servers }}</div><div class="stat-label">ReaR Kurulu</div></div>
+  <div class="stat-card stat-orange"><div class="stat-icon">⚙️</div><div class="stat-val">{{ stats.configured_servers }}</div><div class="stat-label">Yapılandırıldı</div></div>
+  <div class="stat-card stat-green"><div class="stat-icon">✅</div><div class="stat-val">{{ stats.success_backups }}</div><div class="stat-label">Başarılı Yedek</div></div>
+  <div class="stat-card stat-red"><div class="stat-icon">❌</div><div class="stat-val">{{ stats.failed_backups }}</div><div class="stat-label">Başarısız</div></div>
+  <div class="stat-card stat-teal"><div class="stat-icon">⏰</div><div class="stat-val">{{ stats.active_schedules }}</div><div class="stat-label">Aktif Zamanlama</div></div>
+  <div class="stat-card stat-purple"><div class="stat-icon">⚡</div><div class="stat-val" id="runningCount">{{ stats.running_jobs }}</div><div class="stat-label">Çalışan İş</div></div>
+</div>
+
+<div class="grid-2">
+<div class="card">
+  <div class="card-header">🖥️ Sunucular <a href="{{ url_for('servers_list') }}" class="btn btn-outline btn-sm">Tümü</a></div>
+  <div class="table-wrap">
+    {% if servers %}
+    <table>
+      <thead><tr><th>Sunucu</th><th>IP</th><th>ReaR</th><th>Yedek</th><th></th></tr></thead>
+      <tbody>
+        {% for s in servers %}
+        <tr>
+          <td>
+            <a href="{{ url_for('server_detail', sid=s.id) }}" class="link fw-bold">{{ s.label }}</a>
+            <div class="text-muted font-mono" style="font-size:11px">{{ s.hostname }}</div>
+          </td>
+          <td class="font-mono text-muted" style="font-size:12px">{{ s.ip_address }}</td>
+          <td>
+            {% if s.rear_installed and s.rear_configured %}<span class="badge badge-success">✓ Hazır</span>
+            {% elif s.rear_installed %}<span class="badge badge-warning">Kurulu</span>
+            {% else %}<span class="badge badge-secondary">—</span>{% endif %}
+          </td>
+          <td class="font-mono text-muted" style="font-size:12px">{{ backup_info.get(s.id, '-') }}</td>
+          <td><a href="{{ url_for('server_detail', sid=s.id) }}" class="btn btn-outline btn-sm">Detay</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><div class="empty-icon">🖥️</div><p>Henüz sunucu yok.</p>
+    <a href="{{ url_for('server_add') }}" class="btn btn-primary" style="margin-top:10px">Ekle</a></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📋 Son İşler <a href="{{ url_for('jobs_list') }}" class="btn btn-outline btn-sm">Tümü</a></div>
+  <div class="table-wrap">
+    {% if jobs %}
+    <table>
+      <thead><tr><th>#</th><th>Sunucu</th><th>Tür</th><th>Durum</th><th>Tarih</th></tr></thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td><a href="{{ url_for('job_detail', jid=j.id) }}" class="link">#{{ j.id }}</a></td>
+          <td style="font-size:12px">{{ j.server_label }}</td>
+          <td>
+            {% if j.job_type == 'backup' %}<span class="badge badge-info">💾</span>
+            {% elif j.job_type == 'install' %}<span class="badge badge-secondary">📦</span>
+            {% elif j.job_type == 'configure' %}<span class="badge badge-warning">⚙️</span>
+            {% else %}<span class="badge badge-secondary">{{ j.job_type }}</span>{% endif %}
+            {% if j.triggered_by == 'scheduler' %}<span class="badge badge-teal" style="font-size:10px">⏰</span>{% endif %}
+          </td>
+          <td>
+            {% if j.status == 'success' %}<span class="badge badge-success">✓</span>
+            {% elif j.status == 'failed' %}<span class="badge badge-danger">✗</span>
+            {% elif j.status in ('running','pending') %}<span class="badge badge-running">⚡</span>
+            {% else %}<span class="badge badge-secondary">{{ j.status }}</span>{% endif %}
+          </td>
+          <td class="text-muted td-nowrap" style="font-size:11px">{{ (j.started_at or j.finished_at or '-')[:16] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><div class="empty-icon">📋</div><p>Henüz iş yok.</p></div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+{% if stats.total_servers == 0 %}
+<div class="card"><div class="card-header">🚀 Hızlı Başlangıç</div><div class="card-body">
+<div class="alert alert-info">ReaR Manager'e hoş geldiniz! İlk yedek için şu adımları izleyin:</div>
+<ol style="padding-left:18px;color:#c9d1d9;line-height:2.2;font-size:13px">
+  <li><strong>Ayarlar → Genel:</strong> Merkezi IP, NFS modu ve export yolunu ayarlayın</li>
+  <li><strong>Ayarlar → NFS Kur:</strong> Bu sunucuya NFS server kurun (veya ayrı NFS sunucusunu yapılandırın)</li>
+  <li><strong>Ayarlar → SSH Anahtarı Oluştur</strong></li>
+  <li><strong>Sunucu Ekle:</strong> Yedeklenecek sunucuları tanımlayın</li>
+  <li>Sunucu Detayı → <strong>ReaR Kur → Yapılandır → Yedekle</strong></li>
+  <li>Sunucu Detayı → Zamanlamalar → <strong>Otomatik yedekleme ekle</strong></li>
+</ol>
+<div class="btn-group" style="margin-top:14px">
+  <a href="{{ url_for('settings_page') }}" class="btn btn-primary">⚙️ Ayarlar</a>
+  <a href="{{ url_for('server_add') }}" class="btn btn-success">➕ Sunucu Ekle</a>
+</div>
+</div></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+setInterval(()=>{
+  fetch('/api/status')
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d=>{ document.getElementById('runningCount').textContent = d.count; })
+    .catch(()=>{});
+}, 8000);
+</script>
+{% endblock %}

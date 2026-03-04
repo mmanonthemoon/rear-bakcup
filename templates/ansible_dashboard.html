@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Ansible{% endblock %}
+{% block topbar_title %}⚡ Ansible Yönetim Merkezi{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_hosts') }}" class="btn btn-outline btn-sm">🖥 Hostlar</a>
+  <a href="{{ url_for('ansible_playbooks') }}" class="btn btn-primary btn-sm">▶ Playbooklar</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Ansible kurulu değilse büyük uyarı -->
+{% if not ansible_ok %}
+<div class="alert alert-danger" style="font-size:13px">
+  <strong>⚠️ Ansible kurulu değil!</strong>
+  Ansible bu sistemde bulunamadı. Kurulum için:
+  <pre class="code-block" style="margin-top:8px;max-height:80px">pip install ansible --break-system-packages
+# veya:
+apt-get install -y ansible          # Debian/Ubuntu
+dnf install -y ansible              # RHEL/CentOS</pre>
+</div>
+{% else %}
+<div class="alert" style="background:#0d2119;border:1px solid #3fb950;color:#3fb950;
+     padding:10px 16px;border-radius:6px;font-size:12px;margin-bottom:18px">
+  ✓ {{ ansible_ver }}
+</div>
+{% endif %}
+
+<!-- İSTATİSTİKLER -->
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="stat-card">
+    <div class="stat-val">{{ stats.total_hosts }}</div>
+    <div class="stat-lbl">Aktif Host</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">{{ stats.total_groups }}</div>
+    <div class="stat-lbl">Grup</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">{{ stats.total_playbooks }}</div>
+    <div class="stat-lbl">Playbook</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">{{ stats.total_roles }}</div>
+    <div class="stat-lbl">Rol</div>
+  </div>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-top:-8px">
+  <div class="stat-card" style="border-color:#388bfd">
+    <div class="stat-val" style="color:#388bfd">{{ stats.total_runs }}</div>
+    <div class="stat-lbl">Toplam Çalışma</div>
+  </div>
+  <div class="stat-card" style="border-color:#3fb950">
+    <div class="stat-val" style="color:#3fb950">{{ stats.success_runs }}</div>
+    <div class="stat-lbl">Başarılı</div>
+  </div>
+  <div class="stat-card" style="border-color:#f85149">
+    <div class="stat-val" style="color:#f85149">{{ stats.failed_runs }}</div>
+    <div class="stat-lbl">Başarısız</div>
+  </div>
+  <div class="stat-card" style="border-color:#d29922">
+    <div class="stat-val" style="color:#d29922">{{ stats.running_runs }}</div>
+    <div class="stat-lbl">Çalışıyor</div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+<!-- Son çalışmalar -->
+<div class="card">
+  <div class="card-header">
+    ▶ Son Çalışmalar
+    <a href="{{ url_for('ansible_runs') }}" class="btn btn-outline btn-sm" style="float:right">Tümü</a>
+  </div>
+  <div class="table-wrap">
+    {% if recent_runs %}
+    <table>
+      <thead>
+        <tr><th>#</th><th>Playbook</th><th>Limit</th><th>Durum</th><th>Süre</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for r in recent_runs %}
+        <tr>
+          <td class="text-muted font-mono" style="font-size:11px">{{ r.id }}</td>
+          <td><a href="{{ url_for('ansible_run_detail', rid=r.id) }}" class="link">{{ r.playbook_name }}</a></td>
+          <td class="text-muted font-mono" style="font-size:11px">{{ r.limit_hosts or 'all' }}</td>
+          <td>
+            {% if r.status == 'success' %}<span class="badge badge-success">✓ Başarılı</span>
+            {% elif r.status == 'failed' %}<span class="badge badge-danger">✗ Başarısız</span>
+            {% elif r.status == 'running' %}<span class="badge badge-warning">⟳ Çalışıyor</span>
+            {% elif r.status == 'cancelled' %}<span class="badge badge-secondary">⊘ İptal</span>
+            {% else %}<span class="badge badge-secondary">{{ r.status }}</span>{% endif %}
+          </td>
+          <td class="text-muted" style="font-size:11px">
+            {% if r.started_at %}{{ r.started_at[:16] }}{% else %}—{% endif %}
+          </td>
+          <td><a href="{{ url_for('ansible_run_detail', rid=r.id) }}" class="btn btn-outline btn-sm">Log</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="padding:30px">
+      <div class="empty-icon">⟳</div>
+      <p>Henüz playbook çalıştırılmadı.</p>
+      <a href="{{ url_for('ansible_playbooks') }}" class="btn btn-primary btn-sm">Playbook'lara Git</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Hızlı erişim -->
+<div>
+<div class="card">
+  <div class="card-header">🚀 Hızlı Erişim</div>
+  <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <a href="{{ url_for('ansible_host_add') }}" class="btn btn-outline" style="text-align:center;padding:14px 8px">
+      <div style="font-size:22px;margin-bottom:4px">🖥</div>
+      <div style="font-size:12px">Host Ekle</div>
+    </a>
+    <a href="{{ url_for('ansible_groups') }}" class="btn btn-outline" style="text-align:center;padding:14px 8px">
+      <div style="font-size:22px;margin-bottom:4px">📁</div>
+      <div style="font-size:12px">Gruplar</div>
+    </a>
+    <a href="{{ url_for('ansible_playbook_add') }}" class="btn btn-outline" style="text-align:center;padding:14px 8px">
+      <div style="font-size:22px;margin-bottom:4px">📝</div>
+      <div style="font-size:12px">Yeni Playbook</div>
+    </a>
+    <a href="{{ url_for('ansible_roles') }}" class="btn btn-outline" style="text-align:center;padding:14px 8px">
+      <div style="font-size:22px;margin-bottom:4px">🎭</div>
+      <div style="font-size:12px">Roller</div>
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📖 Ansible Workspace</div>
+  <div class="card-body" style="font-size:12px;color:#8b949e">
+    <pre class="code-block" style="max-height:160px;font-size:11px">{{ ansible_dir }}/
+├── ansible.cfg
+├── inventories/hosts.yml    ← otomatik üretilir
+├── playbooks/               ← GUI'den yönetilir
+├── roles/                   ← GUI'den yönetilir
+├── host_vars/               ← host başına değişkenler
+├── group_vars/              ← grup değişkenleri
+└── files/                   ← paylaşılan dosyalar</pre>
+  </div>
+</div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Çalışan iş varsa yenile
+{% if stats.running_runs > 0 %}
+setTimeout(() => location.reload(), 5000);
+{% endif %}
+</script>
+{% endblock %}

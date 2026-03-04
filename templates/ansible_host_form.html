@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_hosts') }}" class="btn btn-secondary btn-sm">← Hostlar</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:820px">
+<div class="card">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+    <form method="post">
+
+      <!-- OS TİPİ SEÇİMİ (büyük butonlar) -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+        <label style="cursor:pointer">
+          <input type="radio" name="os_type" value="linux" id="osLinux"
+            {% if not host or host.os_type == 'linux' %}checked{% endif %}
+            onchange="toggleOsType()" style="display:none">
+          <div id="btnLinux" class="btn" style="text-align:center;padding:16px;
+            border:2px solid {% if not host or host.os_type == 'linux' %}#388bfd{% else %}#30363d{% endif %};
+            background:{% if not host or host.os_type == 'linux' %}#0d2340{% else %}transparent{% endif %}">
+            <div style="font-size:28px">🐧</div>
+            <div style="font-weight:700;margin-top:4px">Linux</div>
+            <div style="font-size:11px;color:#6e7681">SSH + Become</div>
+          </div>
+        </label>
+        <label style="cursor:pointer">
+          <input type="radio" name="os_type" value="windows" id="osWindows"
+            {% if host and host.os_type == 'windows' %}checked{% endif %}
+            onchange="toggleOsType()" style="display:none">
+          <div id="btnWindows" class="btn" style="text-align:center;padding:16px;
+            border:2px solid {% if host and host.os_type == 'windows' %}#388bfd{% else %}#30363d{% endif %};
+            background:{% if host and host.os_type == 'windows' %}#0d2340{% else %}transparent{% endif %}">
+            <div style="font-size:28px">🪟</div>
+            <div style="font-weight:700;margin-top:4px">Windows</div>
+            <div style="font-size:11px;color:#6e7681">WinRM (HTTP)</div>
+          </div>
+        </label>
+      </div>
+
+      <!-- TEMEL BİLGİLER -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:10px">Temel Bilgiler</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ansible Host Adı <span class="req">*</span></label>
+          <input type="text" name="name" class="form-control"
+            value="{{ host.name if host else '' }}"
+            placeholder="ör: web01, win-dc01" required>
+          <div class="form-help">Inventory'de kullanılır, benzersiz olmalı</div>
+        </div>
+        <div class="form-group">
+          <label>Hostname / IP <span class="req">*</span></label>
+          <input type="text" name="hostname" class="form-control"
+            value="{{ host.hostname if host else '' }}"
+            placeholder="192.168.1.100 veya web01.example.com" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Gruplar</label>
+          <select name="group_ids" class="form-select" multiple size="4"
+            style="background:#0d1117">
+            {% for g in groups %}
+            <option value="{{ g.id }}"
+              {% if host and g.id in (sel_groups or []) %}selected{% endif %}>
+              {{ g.name }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-help">Ctrl ile çoklu seçim</div>
+        </div>
+        <div class="form-group">
+          <label>Durum</label>
+          <select name="active" class="form-select">
+            <option value="1" {% if not host or host.active %}selected{% endif %}>✓ Aktif</option>
+            <option value="0" {% if host and not host.active %}selected{% endif %}>✗ Pasif</option>
+          </select>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ════ LINUX BÖLÜMÜ ════ -->
+      <div id="linuxSection">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                    text-transform:uppercase;margin-bottom:10px">SSH Bağlantısı (Linux)</div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>SSH Kullanıcı</label>
+            <input type="text" name="ansible_user" class="form-control" id="linuxUser"
+              value="{{ host.ansible_user if host else '' }}"
+              placeholder="ubuntu, ec2-user, ansible">
+          </div>
+          <div class="form-group">
+            <label>SSH Port</label>
+            <input type="number" name="ssh_port" class="form-control"
+              value="{{ host.ssh_port if host else '22' }}">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Kimlik Doğrulama</label>
+            <select name="auth_type" class="form-select" id="authTypeSel"
+              onchange="toggleAuthType()">
+              <option value="password" {% if not host or host.auth_type == 'password' %}selected{% endif %}>🔒 Şifre</option>
+              <option value="key" {% if host and host.auth_type == 'key' %}selected{% endif %}>🔑 SSH Anahtar</option>
+            </select>
+          </div>
+          <div class="form-group" id="sshPassGroup">
+            <label>SSH Şifresi / ansible_password</label>
+            <input type="password" name="ansible_pass" class="form-control"
+              value="{{ host.ansible_pass if host else '' }}"
+              placeholder="SSH kullanıcı şifresi" autocomplete="new-password">
+          </div>
+        </div>
+
+        <div class="form-group" id="sshKeyGroup" style="display:none">
+          <label>SSH Key Dosyası</label>
+          <input type="text" name="ssh_key_path" class="form-control"
+            value="{{ host.ssh_key_path if host else settings.get('ssh_key_path','') }}"
+            placeholder="/root/.ssh/rear_manager_rsa">
+          <div class="form-help">Ansible kontrol düğümündeki private key yolu</div>
+        </div>
+
+        <!-- Linux Become -->
+        <hr class="divider" style="margin:12px 0">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                    text-transform:uppercase;margin-bottom:10px">Privilege Escalation (Become)</div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Become Yöntemi</label>
+            <select name="become_method" class="form-select" id="becomeMethodSel"
+              onchange="toggleBecome()">
+              <option value="none" {% if not host or host.become_method in ('none','') %}selected{% endif %}>🚫 Yok</option>
+              <option value="sudo" {% if host and host.become_method == 'sudo' %}selected{% endif %}>⚡ sudo</option>
+              <option value="su" {% if host and host.become_method == 'su' %}selected{% endif %}>🔄 su -</option>
+              <option value="pbrun" {% if host and host.become_method == 'pbrun' %}selected{% endif %}>pbrun</option>
+              <option value="pfexec" {% if host and host.become_method == 'pfexec' %}selected{% endif %}>pfexec</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Become Kullanıcı</label>
+            <input type="text" name="become_user" class="form-control"
+              value="{{ host.become_user if host else 'root' }}" id="becomeUserF">
+          </div>
+        </div>
+
+        <div id="becomePassSection" style="display:none">
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" name="become_same" id="becomeSameCb" value="1"
+                {% if not host or host.become_same != 0 %}checked{% endif %}
+                onchange="toggleBecomePass()">
+              <label for="becomeSameCb" style="cursor:pointer">
+                Become şifresi = SSH şifresi ile aynı
+              </label>
+            </div>
+          </div>
+          <div class="form-group" id="becomePassF" style="display:none">
+            <label>Become Şifresi</label>
+            <input type="password" name="become_pass" class="form-control"
+              value="{{ host.become_pass if host else '' }}"
+              placeholder="sudo / su şifresi" autocomplete="new-password">
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ WINDOWS BÖLÜMÜ ════ -->
+      <div id="windowsSection" style="display:none">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                    text-transform:uppercase;margin-bottom:10px">WinRM Bağlantısı (Windows)</div>
+
+        <div class="alert alert-info" style="font-size:12px;margin-bottom:14px">
+          <strong>WinRM Gereksinimleri:</strong>
+          Windows'ta WinRM aktif olmalı. PowerShell'de:
+          <code style="display:block;margin-top:4px;background:#0d1117;padding:4px 8px;border-radius:4px">
+            Enable-PSRemoting -Force<br>
+            winrm set winrm/config/service/auth '@{Basic="true"}'<br>
+            winrm set winrm/config/service '@{AllowUnencrypted="true"}'
+          </code>
+          Ayrıca Ansible controller'da: <code>pip install pywinrm</code>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Windows Kullanıcı</label>
+            <input type="text" name="ansible_user" class="form-control" id="winUser"
+              value="{{ host.ansible_user if host else '' }}"
+              placeholder="Administrator veya DOMAIN\\user">
+            <div class="form-help">Domain için: <code>DOMAIN\kullanici</code> veya <code>kullanici@domain.com</code></div>
+          </div>
+          <div class="form-group">
+            <label>Windows Şifresi</label>
+            <input type="password" name="ansible_pass" class="form-control"
+              value="{{ host.ansible_pass if host else '' }}"
+              placeholder="Windows şifresi" autocomplete="new-password">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>WinRM Port</label>
+            <input type="number" name="winrm_port" class="form-control"
+              value="{{ host.winrm_port if host else '5985' }}" id="winrmPort">
+            <div class="form-help">HTTP: 5985 | HTTPS: 5986</div>
+          </div>
+          <div class="form-group">
+            <label>WinRM Scheme</label>
+            <select name="winrm_scheme" class="form-select" id="winrmScheme"
+              onchange="autoSetPort()">
+              <option value="http" {% if not host or host.winrm_scheme == 'http' %}selected{% endif %}>HTTP (5985) — önerilen offline</option>
+              <option value="https" {% if host and host.winrm_scheme == 'https' %}selected{% endif %}>HTTPS (5986)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>WinRM Transport</label>
+            <select name="win_transport" class="form-select">
+              <option value="ntlm"    {% if not host or host.win_transport == 'ntlm' %}selected{% endif %}>NTLM (domain + workgroup)</option>
+              <option value="basic"   {% if host and host.win_transport == 'basic' %}selected{% endif %}>Basic (workgroup — HTTP zorunlu)</option>
+              <option value="kerberos" {% if host and host.win_transport == 'kerberos' %}selected{% endif %}>Kerberos (domain)</option>
+              <option value="credssp" {% if host and host.win_transport == 'credssp' %}selected{% endif %}>CredSSP (double-hop)</option>
+            </select>
+            <div class="form-help">Domain için NTLM veya Kerberos önerilir</div>
+          </div>
+          <div class="form-group">
+            <label>Domain (Opsiyonel)</label>
+            <input type="text" name="win_domain" class="form-control"
+              value="{{ host.win_domain if host else '' }}"
+              placeholder="example.com (domain üyesiyse)">
+            <div class="form-help">Workgroup makinede boş bırakın</div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- EK DEĞIŞKENLER -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:10px">Ek Değişkenler (host_vars)</div>
+      <div class="form-group">
+        <label>Ek YAML Değişkenler</label>
+        <textarea name="vars_yaml" class="form-control code-area" rows="4"
+          placeholder="# ör:&#10;ansible_python_interpreter: /usr/bin/python3&#10;my_var: my_value">{{ host.vars_yaml if host else '' }}</textarea>
+        <div class="form-help">
+          YAML formatında — <code>host_vars/{{ '{{ name }}' }}</code> dosyasına eklenir.
+          ansible_user, ansible_password vb. buraya yazmayın, üstteki alanlara girin.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Notlar</label>
+        <textarea name="notes" class="form-control" rows="2"
+          placeholder="Bu host hakkında notlar...">{{ host.notes if host else '' }}</textarea>
+      </div>
+
+      <div class="btn-group">
+        <button type="submit" class="btn btn-primary">
+          {% if host %}💾 Güncelle{% else %}➕ Ekle{% endif %}
+        </button>
+        <a href="{{ url_for('ansible_hosts') }}" class="btn btn-secondary">İptal</a>
+        {% if host %}
+        <button type="button" onclick="pingHost({{ host.id }}, '{{ host.name }}')"
+          class="btn btn-teal">🔗 Ping Testi</button>
+        {% endif %}
+      </div>
+
+    </form>
+  </div>
+</div>
+</div>
+
+<!-- Ping Modal -->
+<div id="pingModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+    width:520px;max-width:95vw;padding:20px">
+    <div style="font-weight:700;font-size:15px;margin-bottom:12px">🔗 Bağlantı Testi</div>
+    <pre id="pingOutput" class="code-block" style="min-height:80px;max-height:250px;overflow-y:auto"></pre>
+    <div style="margin-top:14px;text-align:right">
+      <button onclick="document.getElementById('pingModal').style.display='none'"
+        class="btn btn-secondary">Kapat</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleOsType() {
+  const isWin = document.getElementById('osWindows').checked;
+  document.getElementById('linuxSection').style.display  = isWin ? 'none' : 'block';
+  document.getElementById('windowsSection').style.display = isWin ? 'block' : 'none';
+  document.getElementById('btnLinux').style.borderColor   = isWin ? '#30363d' : '#388bfd';
+  document.getElementById('btnLinux').style.background    = isWin ? 'transparent' : '#0d2340';
+  document.getElementById('btnWindows').style.borderColor = isWin ? '#388bfd' : '#30363d';
+  document.getElementById('btnWindows').style.background  = isWin ? '#0d2340' : 'transparent';
+}
+
+function toggleAuthType() {
+  const isKey = document.getElementById('authTypeSel').value === 'key';
+  document.getElementById('sshPassGroup').style.display = isKey ? 'none' : 'block';
+  document.getElementById('sshKeyGroup').style.display  = isKey ? 'block' : 'none';
+}
+
+function toggleBecome() {
+  const m = document.getElementById('becomeMethodSel').value;
+  document.getElementById('becomePassSection').style.display = m === 'none' ? 'none' : 'block';
+}
+
+function toggleBecomePass() {
+  const same = document.getElementById('becomeSameCb').checked;
+  document.getElementById('becomePassF').style.display = same ? 'none' : 'block';
+}
+
+function autoSetPort() {
+  const scheme = document.getElementById('winrmScheme').value;
+  document.getElementById('winrmPort').value = scheme === 'https' ? '5986' : '5985';
+}
+
+{% if host %}
+function pingHost(hid, hname) {
+  const modal = document.getElementById('pingModal');
+  const out   = document.getElementById('pingOutput');
+  out.textContent = '⟳ Test ediliyor...';
+  out.style.color = '#c9d1d9';
+  modal.style.display = 'flex';
+
+  fetch('/api/ansible/ping-host', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({host_id: hid})
+  })
+  .then(r => {
+    if (r.status === 401) throw new Error('Oturum süresi doldu, sayfayı yenileyin.');
+    if (!r.ok) throw new Error('Sunucu hatası: ' + r.status);
+    return r.json();
+  })
+  .then(d => {
+    out.textContent = (d.ok?'✓ BAŞARILI\n\n':'✗ BAŞARISIZ\n\n') + (d.msg||'');
+    out.style.color = d.ok ? '#3fb950':'#f85149';
+  })
+  .catch(e => { out.textContent='Hata: '+e; out.style.color='#f85149'; });
+}
+{% endif %}
+
+// Init
+toggleOsType();
+toggleAuthType();
+toggleBecome();
+toggleBecomePass();
+</script>
+{% endblock %}

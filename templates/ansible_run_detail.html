@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Çalışma #{{ run.id }}{% endblock %}
+{% block topbar_title %}▶ Çalışma #{{ run.id }} — {{ run.playbook_name }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_runs') }}" class="btn btn-secondary btn-sm">← Tüm Çalışmalar</a>
+  {% if run.status == 'running' %}
+  <form method="post" action="{{ url_for('ansible_run_cancel', rid=run.id) }}" style="display:inline">
+    <button type="submit" class="btn btn-danger btn-sm">⊘ Durdur</button>
+  </form>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Durum kartı -->
+<div class="grid-2" style="margin-bottom:16px">
+  <div class="card">
+    <div class="card-body" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px">
+      <div>
+        <div class="text-muted" style="font-size:11px;text-transform:uppercase">Durum</div>
+        <div id="statusBadge">
+          {% if run.status == 'success' %}<span class="badge badge-success" style="font-size:13px">✓ Başarılı</span>
+          {% elif run.status == 'failed' %}<span class="badge badge-danger" style="font-size:13px">✗ Başarısız</span>
+          {% elif run.status == 'running' %}<span class="badge badge-warning" style="font-size:13px">⟳ Çalışıyor...</span>
+          {% elif run.status == 'cancelled' %}<span class="badge badge-secondary" style="font-size:13px">⊘ İptal</span>
+          {% else %}<span class="badge badge-secondary" style="font-size:13px">{{ run.status }}</span>{% endif %}
+        </div>
+      </div>
+      <div>
+        <div class="text-muted" style="font-size:11px;text-transform:uppercase">Limit</div>
+        <div class="font-mono" style="font-size:13px">{{ run.limit_hosts or 'all' }}</div>
+      </div>
+      <div>
+        <div class="text-muted" style="font-size:11px;text-transform:uppercase">Başlangıç</div>
+        <div style="font-size:12px">{{ run.started_at or '—' }}</div>
+      </div>
+      <div>
+        <div class="text-muted" style="font-size:11px;text-transform:uppercase">Bitiş</div>
+        <div style="font-size:12px" id="finishedAt">{{ run.finished_at or '—' }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:14px">
+      {% if run.extra_vars %}
+      <div class="text-muted" style="font-size:11px;margin-bottom:4px">EXTRA VARS</div>
+      <code style="font-size:11px">{{ run.extra_vars }}</code>
+      {% endif %}
+      {% if run.tags_run %}
+      <div class="text-muted" style="font-size:11px;margin-top:8px;margin-bottom:4px">TAGS</div>
+      <code style="font-size:11px">{{ run.tags_run }}</code>
+      {% endif %}
+      <div class="text-muted" style="font-size:11px;margin-top:8px;margin-bottom:4px">TETİKLEYEN</div>
+      <span style="font-size:12px">{{ run.triggered_by or 'manual' }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Log çıktısı -->
+<div class="card">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>📋 Çıktı Logu</span>
+    <div class="btn-group">
+      <button onclick="toggleAutoScroll()" id="autoScrollBtn"
+        class="btn btn-outline btn-sm">⬇ Otomatik Kaydır: AÇIK</button>
+      <button onclick="copyLog()" class="btn btn-outline btn-sm">📋 Kopyala</button>
+      {% if run.status not in ('running', 'pending') %}
+      <button onclick="openConfirm('Çalışmayı Sil','Bu çalışma kaydı silinecek.','dr-{{ run.id }}')"
+        class="btn btn-danger btn-sm">🗑 Sil</button>
+      <form id="dr-{{ run.id }}" action="{{ url_for('ansible_run_delete', rid=run.id) }}"
+        method="post" style="display:none"></form>
+      {% endif %}
+    </div>
+  </div>
+  <div style="background:#0d1117;border-radius:0 0 8px 8px;padding:0">
+    <!-- Ansible çıktı renklendirme bilgisi -->
+    <div style="padding:6px 14px;background:#161b22;border-bottom:1px solid #21262d;
+         font-size:11px;color:#6e7681;display:flex;gap:16px">
+      <span>
+        <span style="color:#3fb950">ok</span> =değişmedi
+        <span style="color:#d29922;margin-left:8px">changed</span> =değişti
+        <span style="color:#f85149;margin-left:8px">failed/error</span> =hata
+        <span style="color:#388bfd;margin-left:8px">skipping</span> =atlandı
+      </span>
+      <span id="liveIndicator" style="color:#d29922">
+        {% if run.status == 'running' %}⟳ Canlı{% endif %}
+      </span>
+    </div>
+    <pre id="logOutput"
+      style="margin:0;padding:14px 16px;font-size:12.5px;line-height:1.65;
+             min-height:400px;max-height:70vh;overflow-y:auto;
+             font-family:'Courier New',Consolas,monospace;color:#c9d1d9;
+             white-space:pre-wrap;word-break:break-all">{{ run.output }}</pre>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RUN_ID   = {{ run.id }};
+const STATUS   = '{{ run.status }}';
+const logEl    = document.getElementById('logOutput');
+let autoScroll = true;
+let offset     = {{ run.output | length }};
+let polling    = STATUS === 'running' || STATUS === 'pending';
+
+// ANSI renk kodlarını HTML'e çevir (temel)
+function ansiToHtml(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\x1b\[0m/g,'</span>')
+    .replace(/\x1b\[1;32m/g,'<span style="color:#3fb950;font-weight:bold">')
+    .replace(/\x1b\[0;32m/g,'<span style="color:#3fb950">')
+    .replace(/\x1b\[1;33m/g,'<span style="color:#d29922;font-weight:bold">')
+    .replace(/\x1b\[0;33m/g,'<span style="color:#d29922">')
+    .replace(/\x1b\[1;31m/g,'<span style="color:#f85149;font-weight:bold">')
+    .replace(/\x1b\[0;31m/g,'<span style="color:#f85149">')
+    .replace(/\x1b\[0;36m/g,'<span style="color:#56d364">')
+    .replace(/\x1b\[0;34m/g,'<span style="color:#388bfd">')
+    .replace(/\x1b\[1m/g,'<span style="font-weight:bold">')
+    .replace(/\x1b\[\d+m/g,'')  // kalan ANSI kodlarını temizle
+    // Ansible çıktı desenleri için renklendirme
+    .replace(/(ok:)/g,'<span style="color:#3fb950">$1</span>')
+    .replace(/(changed:)/g,'<span style="color:#d29922">$1</span>')
+    .replace(/(failed:|FAILED|ERROR:)/g,'<span style="color:#f85149;font-weight:bold">$1</span>')
+    .replace(/(skipping:)/g,'<span style="color:#388bfd">$1</span>')
+    .replace(/(unreachable:)/g,'<span style="color:#ff7b72;font-weight:bold">$1</span>')
+    .replace(/(PLAY RECAP)/g,'<span style="color:#f0f6ff;font-weight:bold">$1</span>')
+    .replace(/(PLAY \[)/g,'<span style="color:#d2a8ff;font-weight:bold">PLAY [</span>')
+    .replace(/(TASK \[)/g,'<span style="color:#79c0ff;font-weight:bold">TASK [</span>');
+}
+
+// İlk yüklemede renklendirme
+logEl.innerHTML = ansiToHtml(logEl.textContent);
+
+function scrollBottom() {
+  if (autoScroll) logEl.scrollTop = logEl.scrollHeight;
+}
+scrollBottom();
+
+function toggleAutoScroll() {
+  autoScroll = !autoScroll;
+  document.getElementById('autoScrollBtn').textContent =
+    '⬇ Otomatik Kaydır: ' + (autoScroll ? 'AÇIK' : 'KAPALI');
+}
+
+function copyLog() {
+  navigator.clipboard.writeText(logEl.innerText).then(() => {
+    const btn = document.querySelector('[onclick="copyLog()"]');
+    btn.textContent = '✓ Kopyalandı'; setTimeout(() => btn.textContent = '📋 Kopyala', 2000);
+  });
+}
+
+// Polling
+async function pollOutput() {
+  if (!polling) return;
+  try {
+    const r = await fetch(`/api/ansible/run-output/${RUN_ID}?offset=${offset}`);
+    const d = await r.json();
+    if (d.chunk) {
+      logEl.innerHTML += ansiToHtml(d.chunk);
+      offset += d.chunk.length;
+      scrollBottom();
+    }
+    if (d.status !== 'running' && d.status !== 'pending') {
+      polling = false;
+      document.getElementById('liveIndicator').textContent = '';
+      // Durum badge güncelle
+      const badges = {
+        success:   '<span class="badge badge-success" style="font-size:13px">✓ Başarılı</span>',
+        failed:    '<span class="badge badge-danger" style="font-size:13px">✗ Başarısız</span>',
+        cancelled: '<span class="badge badge-secondary" style="font-size:13px">⊘ İptal</span>',
+      };
+      document.getElementById('statusBadge').innerHTML = badges[d.status] || d.status;
+    } else {
+      setTimeout(pollOutput, 1500);
+    }
+  } catch(e) {
+    setTimeout(pollOutput, 3000);
+  }
+}
+
+if (polling) {
+  setTimeout(pollOutput, 1000);
+}
+
+// Manuel scroll → auto scroll kapat
+logEl.addEventListener('scroll', function() {
+  const atBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 60;
+  if (!atBottom && autoScroll) {
+    autoScroll = false;
+    document.getElementById('autoScrollBtn').textContent = '⬇ Otomatik Kaydır: KAPALI';
+  }
+});
+</script>
+{% endblock %}

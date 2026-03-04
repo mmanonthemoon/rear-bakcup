@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Playbook Çalıştır — {{ pb.name }}{% endblock %}
+{% block topbar_title %}▶ Playbook Çalıştır: {{ pb.name }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_playbook_edit', pid=pb.id) }}" class="btn btn-secondary btn-sm">← Editör</a>
+{% endblock %}
+{% block content %}
+<div style="max-width:700px">
+<div class="card">
+  <div class="card-header">▶ Çalıştırma Ayarları</div>
+  <div class="card-body">
+    <form method="post">
+
+      <div class="form-group">
+        <label>Host / Grup Limiti</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <button type="button" onclick="setLimit('')" class="btn btn-outline btn-sm">all</button>
+          {% for g in groups %}
+          <button type="button" onclick="setLimit('{{ g.name }}')"
+            class="btn btn-outline btn-sm">{{ g.name }}</button>
+          {% endfor %}
+          {% for h in hosts %}
+          <button type="button" onclick="setLimit('{{ h.name }}')"
+            class="btn btn-outline btn-sm" style="font-size:11px">{{ h.name }}</button>
+          {% endfor %}
+        </div>
+        <input type="text" name="limit" id="limitInp" class="form-control"
+          placeholder="all — boş bırakırsanız tüm hostlar">
+        <div class="form-help">Belirli bir host/grup hedeflemek için girin</div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Etiketler (--tags)</label>
+          <input type="text" name="tags_run" class="form-control"
+            placeholder="setup,config (boş=tümü)">
+        </div>
+        <div class="form-group">
+          <label>Verbosity (-v)</label>
+          <select name="verbosity" class="form-select">
+            <option value="0">Normal</option>
+            <option value="1">-v (detaylı)</option>
+            <option value="2">-vv (daha detaylı)</option>
+            <option value="3">-vvv (debug)</option>
+            <option value="4">-vvvv (connection debug)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Ekstra Değişkenler (--extra-vars)</label>
+        <textarea name="extra_vars" class="form-control code-area" rows="3"
+          placeholder='{"env": "prod", "version": "1.2.3"}&#10;veya&#10;env=prod version=1.2.3'></textarea>
+        <div class="form-help">JSON veya key=value formatı</div>
+      </div>
+
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" name="check_mode" value="1"
+                 style="width:18px;height:18px;cursor:pointer">
+          <span>
+            <strong>Dry-run modu (--check)</strong>
+            <span class="text-muted" style="font-size:12px;display:block">
+              Değişiklik yapmadan ne yapılacağını gösterir. Üretim öncesi test için önerilir.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-success" style="width:100%;padding:14px">
+        ▶ Playbook'u Çalıştır
+      </button>
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function setLimit(v) {
+  document.getElementById('limitInp').value = v;
+}
+</script>
+{% endblock %}

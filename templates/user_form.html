@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('users_list') }}" class="btn btn-secondary btn-sm">← Geri</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:520px">
+<div class="card">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+    <form method="post">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Kullanıcı Adı <span class="req">*</span></label>
+          {% if user %}
+            <input type="text" class="form-control" value="{{ user.username }}" disabled>
+            <div class="form-help">Kullanıcı adı değiştirilemez</div>
+          {% else %}
+            <input type="text" name="username" class="form-control" placeholder="kullanıcı_adi" required>
+          {% endif %}
+        </div>
+        <div class="form-group">
+          <label>Ad Soyad</label>
+          <input type="text" name="full_name" class="form-control"
+            value="{{ user.full_name if user else '' }}" placeholder="Ad Soyad">
+        </div>
+      </div>
+
+      {% if not user %}
+      <div class="form-group">
+        <label>Auth Tipi</label>
+        <select name="auth_type" class="form-select" id="authTypeSelect" onchange="toggleAuthFields()">
+          <option value="local">🔒 Yerel</option>
+          <option value="ad">🏢 Active Directory (AD)</option>
+        </select>
+        <div class="form-help">AD kullanıcıları ilk girişte otomatik oluşturulur; bu sadece pre-tanımlama içindir</div>
+      </div>
+      {% endif %}
+
+      {% if user and user.auth_type == 'ad' %}
+      <div class="alert alert-info" style="font-size:12px">
+        🏢 Bu kullanıcı Active Directory ile giriş yapar. Şifre değiştirilemez.
+      </div>
+      {% else %}
+      <div class="form-group" id="pwGroup">
+        <label>
+          {% if user %}Yeni Şifre (değiştirmek için doldurun)
+          {% else %}Şifre <span class="req">*</span>{% endif %}
+        </label>
+        <input type="password" name="password" class="form-control"
+          placeholder="{% if user %}Boş bırakın = değiştirme{% else %}Şifre{% endif %}">
+      </div>
+      {% endif %}
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rol</label>
+          <select name="role" class="form-select"
+            {% if user and user.is_builtin %}disabled{% endif %}>
+            <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>👑 Yönetici (Admin)</option>
+            <option value="user"  {% if not user or user.role == 'user' %}selected{% endif %}>👤 Kullanıcı</option>
+          </select>
+          {% if user and user.is_builtin %}
+          <div class="form-help">Yerleşik admin rolü değiştirilemez</div>
+          {% endif %}
+        </div>
+        {% if user %}
+        <div class="form-group">
+          <label>Durum</label>
+          <div class="form-check" style="margin-top:8px">
+            <input type="checkbox" name="active" id="activeChk" value="1"
+              {% if user.active %}checked{% endif %}
+              {% if user.is_builtin %}disabled{% endif %}>
+            <label for="activeChk" style="margin-bottom:0">Aktif</label>
+          </div>
+          {% if user.is_builtin %}
+          <div class="form-help">Yerleşik admin devre dışı bırakılamaz</div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="btn-group">
+        <button type="submit" class="btn btn-primary">
+          {% if user %}💾 Güncelle{% else %}➕ Kullanıcı Ekle{% endif %}
+        </button>
+        <a href="{{ url_for('users_list') }}" class="btn btn-secondary">İptal</a>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAuthFields() {
+  const v = document.getElementById('authTypeSelect')?.value;
+  const pg = document.getElementById('pwGroup');
+  if (pg) pg.style.display = v === 'ad' ? 'none' : 'block';
+}
+toggleAuthFields();
+</script>
+{% endblock %}

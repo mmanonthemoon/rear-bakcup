@@ -1,0 +1,14 @@
+# ReaR Manager v2.0 — Python Bağımlılıkları
+flask>=2.3.0
+paramiko>=3.0.0
+apscheduler>=3.10.0
+werkzeug>=2.3.0
+
+# Opsiyonel — Active Directory
+ldap3>=2.9.0
+
+# Opsiyonel — Ansible Windows desteği (WinRM)
+pywinrm>=0.4.3
+
+# Not: Ansible sistem paketi olarak kurulmalıdır.
+# Sistem paketi yoksa: pip install ansible

@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block topbar_actions %}
+  {% if pb %}
+  <a href="{{ url_for('ansible_playbook_run', pid=pb.id) }}" class="btn btn-success btn-sm">▶ Çalıştır</a>
+  {% endif %}
+  <a href="{{ url_for('ansible_playbooks') }}" class="btn btn-secondary btn-sm">← Playbooklar</a>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start">
+
+<!-- EDITOR -->
+<div class="card">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>📝 YAML Editör</span>
+    <div class="btn-group">
+      <button onclick="insertTemplate('linux')" class="btn btn-outline btn-sm">🐧 Linux Şablon</button>
+      <button onclick="insertTemplate('windows')" class="btn btn-outline btn-sm">🪟 Windows Şablon</button>
+      <button onclick="insertTemplate('role')" class="btn btn-outline btn-sm">🎭 Rol Şablon</button>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0">
+    <form method="post" id="pbForm">
+      <input type="hidden" name="content" id="contentField"
+        value="{{ pb.content if pb else '' }}">
+
+      <!-- Editör toolbar -->
+      <div style="background:#0d1117;border-bottom:1px solid #21262d;
+                  padding:6px 12px;display:flex;gap:6px;align-items:center">
+        <button type="button" onclick="indentLine(2)" class="btn btn-outline btn-sm" style="font-size:11px">→ 2</button>
+        <button type="button" onclick="indentLine(4)" class="btn btn-outline btn-sm" style="font-size:11px">→ 4</button>
+        <button type="button" onclick="insertSnippet('- name: ')" class="btn btn-outline btn-sm" style="font-size:11px">task</button>
+        <button type="button" onclick="insertSnippet('  debug:\n    msg: ')" class="btn btn-outline btn-sm" style="font-size:11px">debug</button>
+        <button type="button" onclick="insertSnippet('  register: result\n')" class="btn btn-outline btn-sm" style="font-size:11px">register</button>
+        <button type="button" onclick="insertSnippet('  when: ')" class="btn btn-outline btn-sm" style="font-size:11px">when</button>
+        <button type="button" onclick="insertSnippet('  notify:\n    - handler_name\n')" class="btn btn-outline btn-sm" style="font-size:11px">notify</button>
+        <span style="flex:1"></span>
+        <span id="lineCol" style="font-size:11px;color:#6e7681">—</span>
+      </div>
+
+      <textarea id="yamlEditor" class="code-area"
+        style="width:100%;min-height:520px;resize:vertical;border:none;
+               border-radius:0;font-size:13px;line-height:1.7;padding:14px;
+               outline:none;tab-size:2"
+        spellcheck="false"
+        placeholder="---
+- name: Playbook Adı
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Görev adı
+      debug:
+        msg: 'Merhaba!'
+">{{ pb.content if pb else '' }}</textarea>
+    </form>
+  </div>
+</div>
+
+<!-- SAĞ PANEL: Meta + Kaydet -->
+<div>
+<div class="card">
+  <div class="card-header">📋 Playbook Bilgileri</div>
+  <div class="card-body">
+    <form method="post" id="metaForm">
+      <input type="hidden" name="content" id="metaContent">
+      <div class="form-group">
+        <label>Playbook Adı <span class="req">*</span></label>
+        <input type="text" name="name" id="pbName" class="form-control"
+          value="{{ pb.name if pb else '' }}"
+          placeholder="ör: linux-update" required>
+        <div class="form-help">.yml uzantısı otomatik eklenir</div>
+      </div>
+      <div class="form-group">
+        <label>Açıklama</label>
+        <textarea name="description" class="form-control" rows="2"
+          placeholder="Bu playbook ne yapar...">{{ pb.description if pb else '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Etiketler</label>
+        <input type="text" name="tags" class="form-control"
+          value="{{ pb.tags if pb else '' }}"
+          placeholder="update, config, deploy (virgülle ayır)">
+      </div>
+      <button type="submit" onclick="syncContent()" class="btn btn-primary" style="width:100%">
+        💾 Kaydet
+      </button>
+      {% if pb %}
+      <a href="{{ url_for('ansible_playbook_run', pid=pb.id) }}"
+         class="btn btn-success" style="width:100%;margin-top:8px;display:block;text-align:center">
+        ▶ Çalıştır
+      </a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📖 Hosts Hedefleme</div>
+  <div class="card-body" style="font-size:12px;color:#8b949e;line-height:1.9">
+    <div style="margin-bottom:8px"><strong style="color:#f0f6ff">Mevcut Gruplar:</strong></div>
+    {% for g in groups %}
+    <code style="display:block;cursor:pointer;padding:2px 6px;margin-bottom:2px;
+                 background:#0d1117;border-radius:3px"
+      onclick="insertText('hosts: {{ g.name }}')">{{ g.name }}</code>
+    {% else %}
+    <span class="text-muted">Grup yok — önce Gruplar'dan ekleyin</span>
+    {% endfor %}
+    <hr style="border-color:#21262d;margin:10px 0">
+    <code onclick="insertText('hosts: all')" style="cursor:pointer;display:block;padding:2px 6px;background:#0d1117;border-radius:3px;margin-bottom:4px">all</code>
+    <code onclick="insertText('hosts: linux')" style="cursor:pointer;display:block;padding:2px 6px;background:#0d1117;border-radius:3px;margin-bottom:4px">linux</code>
+    <code onclick="insertText('hosts: windows')" style="cursor:pointer;display:block;padding:2px 6px;background:#0d1117;border-radius:3px">windows</code>
+  </div>
+</div>
+
+{% if pb %}
+<div class="card">
+  <div class="card-header" style="color:#f85149">⚠ Tehlikeli Bölge</div>
+  <div class="card-body">
+    <button onclick="openConfirm('Playbook Sil','{{ pb.name }} kalıcı olarak silinecek!','dpb-{{ pb.id }}')"
+      class="btn btn-danger" style="width:100%">🗑 Playbook'u Sil</button>
+    <form id="dpb-{{ pb.id }}" action="{{ url_for('ansible_playbook_delete', pid=pb.id) }}"
+      method="post" style="display:none"></form>
+  </div>
+</div>
+{% endif %}
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const editor = document.getElementById('yamlEditor');
+
+// Satır/sütun gösterimi
+editor.addEventListener('keyup', updatePos);
+editor.addEventListener('click', updatePos);
+function updatePos() {
+  const txt = editor.value.substring(0, editor.selectionStart);
+  const lines = txt.split('\n');
+  document.getElementById('lineCol').textContent =
+    `Satır ${lines.length} : Sütun ${lines[lines.length-1].length + 1}`;
+}
+
+// Tab tuşu girinti
+editor.addEventListener('keydown', function(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = this.selectionStart, end = this.selectionEnd;
+    this.value = this.value.substr(0, s) + '  ' + this.value.substr(end);
+    this.selectionStart = this.selectionEnd = s + 2;
+  }
+});
+
+function syncContent() {
+  document.getElementById('contentField').value = editor.value;
+  document.getElementById('metaContent').value  = editor.value;
+  document.getElementById('metaForm').elements['name'].value =
+    document.getElementById('pbName').value;
+}
+
+// metaForm submit → sync content
+document.getElementById('metaForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  document.getElementById('metaContent').value = editor.value;
+  this.submit();
+});
+
+function insertSnippet(text) {
+  const s = editor.selectionStart;
+  editor.value = editor.value.substr(0,s) + text + editor.value.substr(editor.selectionEnd);
+  editor.selectionStart = editor.selectionEnd = s + text.length;
+  editor.focus();
+}
+
+function insertText(text) {
+  const lines = editor.value.split('\n');
+  // hosts: satırını değiştir
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().startsWith('hosts:')) {
+      lines[i] = lines[i].replace(/hosts:.*/, text);
+      editor.value = lines.join('\n');
+      return;
+    }
+  }
+  // Yoksa imlece ekle
+  insertSnippet(text + '\n');
+}
+
+function indentLine(n) {
+  editor.value = editor.value.replace(/^(  |\t)/gm, ' '.repeat(n));
+}
+
+const TEMPLATES = {
+  linux: `---
+- name: Linux Görev Adı
+  hosts: linux
+  become: yes
+  gather_facts: yes
+
+  vars:
+    my_var: "deger"
+
+  tasks:
+    - name: Paket kur
+      apt:
+        name: htop
+        state: present
+        update_cache: no
+      when: ansible_os_family == "Debian"
+
+    - name: Servis başlat
+      service:
+        name: cron
+        state: started
+        enabled: yes
+
+    - name: Dosya kopyala
+      copy:
+        src: files/myconfig.conf
+        dest: /etc/myconfig.conf
+        owner: root
+        mode: '0644'
+
+    - name: Template yaz
+      template:
+        src: templates/myapp.j2
+        dest: /etc/myapp.conf
+
+    - name: Komut çalıştır
+      command: whoami
+      register: out
+      changed_when: false
+
+    - name: Sonucu göster
+      debug:
+        var: out.stdout
+`,
+  windows: `---
+- name: Windows Görev Adı
+  hosts: windows
+  gather_facts: yes
+
+  tasks:
+    - name: WinRM bağlantı testi
+      win_ping:
+
+    - name: Sistem bilgisi
+      debug:
+        msg: "{{ ansible_hostname }} - {{ ansible_os_name }}"
+
+    - name: Windows servis başlat
+      win_service:
+        name: Spooler
+        state: started
+
+    - name: Registry değeri yaz
+      win_regedit:
+        path: HKCU:\\Software\\Test
+        name: MyValue
+        data: Hello
+        type: string
+
+    - name: Dosya kopyala (Windows)
+      win_copy:
+        src: files/script.ps1
+        dest: C:\\Temp\\script.ps1
+
+    - name: PowerShell komutu
+      win_shell: Get-Process | Select-Object -First 5
+      register: ps_out
+
+    - name: Çıktıyı göster
+      debug:
+        var: ps_out.stdout_lines
+
+    - name: Windows özellik kur
+      win_feature:
+        name: Web-Server
+        state: present
+      when: ansible_os_family == "Windows"
+`,
+  role: `---
+- name: Rol Kullanım Örneği
+  hosts: all
+  become: yes
+
+  vars:
+    app_port: 8080
+
+  roles:
+    - common
+    - role: my_role
+      vars:
+        role_var: value
+
+  tasks:
+    - name: Rol sonrası görev
+      debug:
+        msg: "Rol uygulandı!"
+
+  handlers:
+    - name: restart service
+      service:
+        name: myapp
+        state: restarted
+`
+};
+
+function insertTemplate(type) {
+  if (editor.value.trim() &&
+      !confirm('Mevcut içerik silinecek. Devam?')) return;
+  editor.value = TEMPLATES[type] || '';
+  editor.focus();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Toplu Sunucu Ekle{% endblock %}
+{% block topbar_title %}📋 Toplu Sunucu Ekleme{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('servers_list') }}" class="btn btn-secondary btn-sm">← Geri</a>
+  <a href="{{ url_for('server_add') }}" class="btn btn-outline btn-sm">➕ Tekli Ekle</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+
+<!-- SOL: FORM -->
+<div>
+<div class="card">
+  <div class="card-header">⚙️ Varsayılan Değerler</div>
+  <div class="card-body">
+    <p class="text-muted" style="font-size:12px;margin-bottom:14px">
+      Satırlarda belirtilmeyen alanlar bu varsayılanları kullanır.
+    </p>
+    <form method="post" enctype="multipart/form-data" id="bulkForm">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>SSH Kullanıcı</label>
+          <input type="text" name="def_ssh_user" class="form-control"
+            value="ubuntu" placeholder="ubuntu">
+        </div>
+        <div class="form-group">
+          <label>SSH Auth</label>
+          <select name="def_auth" class="form-select">
+            <option value="password">🔒 Şifre</option>
+            <option value="key">🔑 Anahtar</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>SSH Şifresi (varsayılan)</label>
+        <input type="password" name="def_ssh_password" class="form-control"
+          placeholder="Tüm sunucular için varsayılan şifre" autocomplete="new-password">
+        <div class="form-help">
+          Satırda farklı şifre belirtilmişse o kullanılır.
+          Anahtar auth seçiliyse boş bırakın.
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:8px">Become Ayarları</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Become Yöntemi</label>
+          <select name="def_become_method" class="form-select" id="defBecomeMethod"
+            onchange="toggleDefBecome()">
+            <option value="sudo">⚡ sudo</option>
+            <option value="su">🔄 su -</option>
+            <option value="none">🚫 Yok (root SSH)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Become Hedef Kullanıcı</label>
+          <input type="text" name="def_become_user" class="form-control"
+            value="root" placeholder="root">
+        </div>
+      </div>
+
+      <div id="defBecomePassSection">
+        <div class="form-group">
+          <div class="form-check">
+            <input type="checkbox" name="def_become_same_pass" id="defBecomeSamePass"
+              value="1" checked onchange="toggleDefBecomePass()">
+            <label for="defBecomeSamePass" style="margin-bottom:0;cursor:pointer">
+              Become şifresi = SSH şifresi ile aynı
+            </label>
+          </div>
+        </div>
+        <div class="form-group" id="defBecomePassField" style="display:none">
+          <label>Become Şifresi (varsayılan)</label>
+          <input type="password" name="def_become_password" class="form-control"
+            placeholder="Become için ayrı şifre" autocomplete="new-password">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- VERİ GİRİŞİ: METİN VEYA CSV -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:8px">Sunucu Verisi</div>
+
+      <div class="form-group">
+        <label>CSV Dosyası Yükle</label>
+        <input type="file" name="csv_file" class="form-control"
+          accept=".csv,.txt,.tsv" style="padding:5px"
+          onchange="document.getElementById('bulkText').value=''">
+        <div class="form-help">
+          .csv, .tsv veya .txt — başlık satırı opsiyonel
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>— veya Metin Olarak Yapıştır —</label>
+        <textarea name="bulk_text" class="form-control" rows="10"
+          id="bulkText"
+          placeholder="web01,web01.example.com,192.168.1.101
+web02,web02.example.com,192.168.1.102
+db01,db01.example.com,192.168.1.103,22,ubuntu,password,MyPass123,sudo,root,1
+"></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-success" style="width:100%">
+        📥 Sunucuları İçe Aktar
+      </button>
+    </form>
+  </div>
+</div>
+</div>
+
+<!-- SAĞ: DOKÜMANTASYON -->
+<div>
+<div class="card">
+  <div class="card-header">📖 Format Kılavuzu</div>
+  <div class="card-body" style="font-size:12px;color:#c9d1d9">
+
+    <p style="color:#8b949e;margin-bottom:12px">
+      Her satır bir sunucu. Ayraç: <strong>virgül (,)</strong> veya
+      <strong>sekme (TAB)</strong> — otomatik tespit edilir.
+      Başlık satırı varsa otomatik atlanır.
+      <code>#</code> ile başlayan satırlar yorum olarak işlenir.
+    </p>
+
+    <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;
+                padding:10px 14px;font-family:'Courier New',monospace;
+                font-size:11px;color:#8b949e;margin-bottom:14px;overflow-x:auto">
+      <span style="color:#6e7681"># Sütun sırası:</span><br>
+      <span style="color:#f97316">label</span>,
+      <span style="color:#f97316">hostname</span>,
+      <span style="color:#f97316">ip</span>
+      [,<span style="color:#58a6ff">port</span>]
+      [,<span style="color:#58a6ff">ssh_user</span>]
+      [,<span style="color:#58a6ff">auth</span>]
+      [,<span style="color:#58a6ff">ssh_pass</span>]<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;[,<span style="color:#3fb950">become_method</span>]
+      [,<span style="color:#3fb950">become_user</span>]
+      [,<span style="color:#3fb950">same_pass</span>]
+      [,<span style="color:#3fb950">become_pass</span>]
+      [,<span style="color:#a371f7">notes</span>]
+    </div>
+
+    <table style="width:100%;font-size:11px;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid #21262d">
+          <th style="padding:5px 8px;color:#6e7681;text-align:left">Sütun</th>
+          <th style="padding:5px 8px;color:#6e7681;text-align:left">Zorunlu</th>
+          <th style="padding:5px 8px;color:#6e7681;text-align:left">Geçerli Değerler / Örnek</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in [
+          ('label',         '✓', 'prod-web-01'),
+          ('hostname',      '✓', 'web01.example.com'),
+          ('ip',            '✓', '192.168.1.101'),
+          ('port',          '—', '22 (varsayılan)'),
+          ('ssh_user',      '—', 'ubuntu, root, ec2-user'),
+          ('auth',          '—', 'password / key'),
+          ('ssh_pass',      '—', 'SSH şifresi'),
+          ('become_method', '—', 'none / sudo / su'),
+          ('become_user',   '—', 'root (varsayılan)'),
+          ('same_pass',     '—', '1 (aynı) / 0 (farklı)'),
+          ('become_pass',   '—', 'sudo/su şifresi'),
+          ('notes',         '—', 'Açıklama'),
+        ] %}
+        <tr style="border-bottom:1px solid #161b22">
+          <td style="padding:4px 8px;font-family:'Courier New',monospace;color:#f97316">{{ row[0] }}</td>
+          <td style="padding:4px 8px;color:{% if row[1] == '✓' %}#3fb950{% else %}#6e7681{% endif %}">{{ row[1] }}</td>
+          <td style="padding:4px 8px;color:#8b949e">{{ row[2] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr class="divider">
+    <div style="font-weight:600;color:#f0f6ff;margin-bottom:8px">📝 Örnekler</div>
+
+    <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;
+                padding:10px 14px;font-family:'Courier New',monospace;font-size:11px;
+                color:#8b949e;line-height:1.9;overflow-x:auto">
+      <span style="color:#6e7681"># En sade — sadece zorunlu alanlar (varsayılanlar kullanılır):</span><br>
+      <span style="color:#c9d1d9">web01,web01.example.com,192.168.1.101</span><br>
+      <span style="color:#c9d1d9">web02,web02.example.com,192.168.1.102</span><br>
+      <br>
+      <span style="color:#6e7681"># SSH şifresi satırda belirtilmiş:</span><br>
+      <span style="color:#c9d1d9">db01,db01.local,10.0.0.50,22,ubuntu,password,Ubuntu2024!</span><br>
+      <br>
+      <span style="color:#6e7681"># sudo + same_pass=1 (SSH=sudo şifresi):</span><br>
+      <span style="color:#c9d1d9">app01,app01.local,10.0.0.51,22,ubuntu,password,Pass!,sudo,root,1</span><br>
+      <br>
+      <span style="color:#6e7681"># su - + farklı root şifresi (same_pass=0):</span><br>
+      <span style="color:#c9d1d9">legacy01,old.local,10.0.0.60,22,admin,password,AdminPass,su,root,0,RootPass123</span><br>
+      <br>
+      <span style="color:#6e7681"># SSH anahtar + NOPASSWD sudo (şifresiz):</span><br>
+      <span style="color:#c9d1d9">prod01,prod01.dc.local,172.16.0.10,22,deploy,key,,sudo,root,0,</span>
+    </div>
+
+    <hr class="divider">
+    <div class="alert alert-warning" style="font-size:11px;padding:8px 12px">
+      <strong>Not:</strong> Aynı IP veya hostname'e sahip sunucular atlanır.
+      Satır başına <code>#</code> koyarak yorum satırı ekleyebilirsiniz.
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📋 Örnek CSV İndir</div>
+  <div class="card-body" style="padding:12px">
+    <p class="text-muted" style="font-size:12px;margin-bottom:10px">
+      Şablonu indirip düzenleyebilirsiniz.
+    </p>
+    <button class="btn btn-secondary btn-sm" onclick="downloadTemplate()">
+      ⬇ CSV Şablonu İndir
+    </button>
+  </div>
+</div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDefBecome() {
+  const m = document.getElementById('defBecomeMethod').value;
+  document.getElementById('defBecomePassSection').style.display =
+    m === 'none' ? 'none' : 'block';
+}
+function toggleDefBecomePass() {
+  const same = document.getElementById('defBecomeSamePass').checked;
+  document.getElementById('defBecomePassField').style.display = same ? 'none' : 'block';
+}
+toggleDefBecome();
+toggleDefBecomePass();
+
+function downloadTemplate() {
+  const csv = [
+    '#label,hostname,ip,port,ssh_user,auth,ssh_pass,become_method,become_user,same_pass,become_pass,notes',
+    'web01,web01.example.com,192.168.1.101,22,ubuntu,password,Ubuntu2024!,sudo,root,1,,Web Sunucusu 1',
+    'web02,web02.example.com,192.168.1.102,22,ubuntu,password,Ubuntu2024!,sudo,root,1,,Web Sunucusu 2',
+    'db01,db01.example.com,192.168.1.110,22,root,password,RootPass!,none,root,1,,Veritabanı',
+    'legacy01,legacy.example.com,192.168.1.120,22,admin,password,AdminPass,su,root,0,RootPass!,Eski Sunucu',
+    '#prod01,prod01.dc.local,172.16.0.10,22,deploy,key,,sudo,root,0,,Üretim (key auth)',
+  ].join('\n');
+
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'rear-manager-servers-template.csv';
+  a.click();
+}
+</script>
+{% endblock %}

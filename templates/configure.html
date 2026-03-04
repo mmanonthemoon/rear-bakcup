@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Yapılandırma - {{ server.label }}{% endblock %}
+{% block topbar_title %}⚙️ ReaR Yapılandırma — {{ server.label }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('server_detail', sid=server.id) }}" class="btn btn-secondary btn-sm">← Geri</a>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('servers_list') }}">Sunucular</a><span>›</span>
+  <a href="{{ url_for('server_detail', sid=server.id) }}">{{ server.label }}</a><span>›</span>
+  <span>Yapılandırma</span>
+</div>
+
+<div class="grid-2">
+<div>
+  <div class="card">
+    <div class="card-header">⚙️ Yapılandırma Ayarları</div>
+    <div class="card-body">
+      <form method="post" id="cfgForm">
+
+        <!-- NFS MODU -->
+        <div class="form-group">
+          <label>NFS Modu</label>
+          <select name="nfs_mode" class="form-select" id="nfsModeLocal" onchange="updatePreview()">
+            <option value="central" {% if settings.nfs_mode != 'separate' %}selected{% endif %}>
+              🖥️ Merkezi Sunucu ({{ settings.central_ip }})
+            </option>
+            <option value="separate" {% if settings.nfs_mode == 'separate' %}selected{% endif %}>
+              🗄️ Ayrı NFS Sunucusu
+            </option>
+          </select>
+        </div>
+
+        <div id="localCentralIP">
+          <div class="form-group">
+            <label>Merkezi/NFS Sunucu IP</label>
+            <input type="text" name="central_ip" id="centralIpInput"
+              class="form-control"
+              value="{{ settings.central_ip }}"
+              oninput="updatePreview()">
+          </div>
+        </div>
+
+        <div id="localNfsServerIP" style="display:none">
+          <div class="form-group">
+            <label>Ayrı NFS Sunucusu IP</label>
+            <input type="text" name="nfs_server_ip" id="nfsServerInput"
+              class="form-control"
+              value="{{ settings.nfs_server_ip }}"
+              oninput="updatePreview()">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Çıktı Formatı</label>
+            <select name="rear_output" class="form-select" onchange="updatePreview()">
+              <option value="ISO" {% if settings.rear_output == 'ISO' %}selected{% endif %}>ISO</option>
+              <option value="PXE" {% if settings.rear_output == 'PXE' %}selected{% endif %}>PXE</option>
+              <option value="RAWDISK" {% if settings.rear_output == 'RAWDISK' %}selected{% endif %}>RAW Disk</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Yedekleme Yöntemi</label>
+            <select name="rear_backup" class="form-select" onchange="updatePreview()">
+              <option value="NETFS" {% if settings.rear_backup == 'NETFS' %}selected{% endif %}>NETFS/NFS</option>
+              <option value="RSYNC" {% if settings.rear_backup == 'RSYNC' %}selected{% endif %}>RSYNC</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="font-size:12px;font-weight:600;color:#c9d1d9;margin-bottom:10px">🔧 Disk / Donanım</div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" name="migration_mode" id="migChk" value="1"
+                {% if settings.migration_mode == '1' %}checked{% endif %}
+                onchange="updatePreview()">
+              <label for="migChk" style="margin-bottom:0">MIGRATION_MODE</label>
+            </div>
+            <div class="form-help" style="margin-left:22px">Farklı donanım kurtarma</div>
+          </div>
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" name="autoresize" id="autoChk" value="1"
+                {% if settings.autoresize == '1' %}checked{% endif %}
+                onchange="updatePreview()">
+              <label for="autoChk" style="margin-bottom:0">AUTORESIZE</label>
+            </div>
+            <div class="form-help" style="margin-left:22px">Otomatik disk boyutlandırma</div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="font-size:12px;font-weight:600;color:#c9d1d9;margin-bottom:8px">
+          🚫 Bu Sunucuya Özel Hariç Dizinler
+        </div>
+        <div class="form-group">
+          <textarea name="server_exclude_dirs" class="form-control" rows="4"
+            id="serverExclude"
+            placeholder="/home/user/.cache/*&#10;/var/lib/docker/*"
+            oninput="updatePreview()">{{ server.exclude_dirs or '' }}</textarea>
+          <div class="form-help">
+            Global hariç dizinler ({{ settings.global_exclude_dirs.splitlines()|length if settings.global_exclude_dirs else 0 }} adet) de config'e eklenir.
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button type="submit" class="btn btn-primary">⚙️ Yapılandırmayı Uygula</button>
+          <a href="{{ url_for('server_detail', sid=server.id) }}" class="btn btn-secondary">İptal</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="card">
+    <div class="card-header">
+      👁️ /etc/rear/local.conf Önizleme
+      <span class="text-muted" style="font-size:11px">Anlık</span>
+    </div>
+    <pre id="cfgPreview" class="code-block" style="max-height:560px;border-radius:0;border:none">{{ preview }}</pre>
+  </div>
+
+  <div class="card">
+    <div class="card-header">📡 NFS Hedef URL</div>
+    <div class="card-body">
+      <code id="nfsUrlDisplay" class="code-block" style="display:block;font-size:12px">{{ nfs_url }}</code>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const hostname = {{ server.hostname | tojson }};
+const nfsPath  = {{ settings.nfs_export_path | tojson }};
+const globalExcludes = {{ (settings.global_exclude_dirs or '') | tojson }};
+
+function updatePreview() {
+  const mode   = document.getElementById('nfsModeLocal').value;
+  const ip     = mode === 'separate'
+    ? (document.getElementById('nfsServerInput')?.value || '')
+    : (document.getElementById('centralIpInput')?.value || '');
+  const output = document.querySelector('[name=rear_output]').value;
+  const backup = document.querySelector('[name=rear_backup]').value;
+  const mig    = document.getElementById('migChk').checked;
+  const auto   = document.getElementById('autoChk').checked;
+  const excl   = document.getElementById('serverExclude').value;
+
+  const backupUrl = `nfs://${ip}${nfsPath}/${hostname}`;
+
+  // Update NFS URL display
+  document.getElementById('nfsUrlDisplay').textContent = backupUrl;
+  document.getElementById('localNfsServerIP').style.display = mode === 'separate' ? 'block' : 'none';
+  document.getElementById('localCentralIP').style.display = mode === 'separate' ? 'none' : 'block';
+
+  let lines = [
+    `# ReaR Yapılandırması - ReaR Manager v2.0`,
+    `# Sunucu: ${hostname}  |  NFS Mod: ${mode}`,
+    ``,
+    `OUTPUT=${output}`,
+    `BACKUP=${backup}`,
+    `BACKUP_URL="${backupUrl}"`,
+    ``,
+    `# ── Farklı donanım / disk boyutu ───────────`,
+    mig  ? `MIGRATION_MODE=true` : `# MIGRATION_MODE=true`,
+  ];
+
+  if (auto) {
+    lines.push(`AUTORESIZE_PARTITIONS=("true")`);
+    lines.push(`AUTORESIZE_EXCLUDE_PARTITIONS=()`);
+    lines.push(`AUTOSHRINK_DISK_SIZE_LIMIT_PERCENTAGE=80`);
+    lines.push(`AUTOINCREASE_DISK_SIZE_THRESHOLD_PERCENTAGE=10`);
+  }
+
+  lines.push(``, `# ── Ağ ────────────────────────────────────`, `USE_DHCLIENT=yes`);
+  lines.push(``, `# ── Hariç yollar ──────────────────────────`);
+  lines.push(`BACKUP_PROG_EXCLUDE=(`);
+  lines.push(`    '\${BACKUP_PROG_EXCLUDE[@]}'`);
+  lines.push(`    '/tmp/*'`, `    '/var/tmp/*'`, `    '/proc/*'`, `    '/sys/*'`, `    '/dev/*'`, `    '/run/*'`);
+
+  // Global excludes
+  if (globalExcludes.trim()) {
+    lines.push(`    # --- Global hariç dizinler ---`);
+    globalExcludes.split('\n').forEach(l => { l=l.trim(); if(l && !l.startsWith('#')) lines.push(`    '${l}'`); });
+  }
+  // Server-specific
+  if (excl.trim()) {
+    lines.push(`    # --- Sunucuya özel ---`);
+    excl.split('\n').forEach(l => { l=l.trim(); if(l) lines.push(`    '${l}'`); });
+  }
+  lines.push(`)`);
+  lines.push(``, `# ── ISO ────────────────────────────────────`);
+  lines.push(`OUTPUT_URL=''`, `ISO_DEFAULT=automatic`);
+
+  document.getElementById('cfgPreview').textContent = lines.join('\n');
+}
+updatePreview();
+</script>
+{% endblock %}

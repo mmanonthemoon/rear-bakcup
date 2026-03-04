@@ -1,0 +1,28 @@
+---
+# Örnek Windows Playbook
+- name: Windows Sunucu Temel Kontroller
+  hosts: windows
+  gather_facts: yes
+
+  tasks:
+    - name: Sistem bilgisi
+      debug:
+        msg: "{{ ansible_hostname }} - {{ ansible_os_name }} {{ ansible_os_version }}"
+
+    - name: Disk kullanımı
+      win_disk_facts:
+
+    - name: Disk bilgisi göster
+      debug:
+        var: ansible_disks
+
+    - name: Servis listesi (çalışan)
+      win_service_info:
+      register: svc_info
+
+    - name: Çalışan servis sayısı
+      debug:
+        msg: "Çalışan servis sayısı: {{ svc_info.services | selectattr('state', 'eq', 'running') | list | length }}"
+
+    - name: WinRM bağlantı testi
+      win_ping:

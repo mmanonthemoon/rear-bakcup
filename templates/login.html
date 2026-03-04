@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giriş — ReaR Manager</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0f1117;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-wrap {
+  width: 100%;
+  max-width: 420px;
+}
+.logo-area {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  border-radius: 16px;
+  font-size: 30px;
+  margin-bottom: 14px;
+  box-shadow: 0 8px 32px rgba(249,115,22,0.3);
+}
+.logo-title { font-size: 24px; font-weight: 700; color: #f0f6ff; }
+.logo-sub   { font-size: 13px; color: #6e7681; margin-top: 4px; }
+
+.card {
+  background: #161b22;
+  border: 1px solid #21262d;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+
+.tab-row {
+  display: flex;
+  margin-bottom: 24px;
+  background: #0d1117;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: transparent;
+  color: #8b949e;
+}
+.tab-btn.active {
+  background: #21262d;
+  color: #f0f6ff;
+}
+
+.form-group { margin-bottom: 18px; }
+label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 6px; font-weight: 500; }
+input[type=text], input[type=password] {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus {
+  outline: none;
+  border-color: #388bfd;
+  box-shadow: 0 0 0 3px rgba(56,139,253,0.15);
+}
+input::placeholder { color: #484f58; }
+
+.btn-login {
+  width: 100%;
+  padding: 11px;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: 4px;
+}
+.btn-login:hover { opacity: 0.9; }
+
+.error-msg {
+  background: #2d1317;
+  border: 1px solid #f85149;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #ff7b72;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.footer-note {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: #484f58;
+}
+
+.ad-panel { display: none; }
+.ad-panel.active { display: block; }
+.local-panel { display: block; }
+.local-panel.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="logo-area">
+    <div class="logo-icon">💾</div>
+    <div class="logo-title">ReaR Manager</div>
+    <div class="logo-sub">Merkezi Linux Yedekleme Yönetimi</div>
+  </div>
+
+  <div class="card">
+    {% if ad_enabled %}
+    <div class="tab-row">
+      <button class="tab-btn active" id="tabLocal" onclick="switchTab('local')">
+        🔒 Yerel Giriş
+      </button>
+      <button class="tab-btn" id="tabAD" onclick="switchTab('ad')">
+        🏢 Active Directory
+      </button>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="error-msg">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <!-- YEREL GİRİŞ -->
+    <form method="post" id="localForm">
+      <input type="hidden" name="auth_method" value="local">
+      <div class="form-group">
+        <label>Kullanıcı Adı</label>
+        <input type="text" name="username" placeholder="Kullanıcı adı" required autofocus autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Şifre</label>
+        <input type="password" name="password" placeholder="Şifre" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-login">Giriş Yap</button>
+    </form>
+
+    <!-- AD GİRİŞ -->
+    {% if ad_enabled %}
+    <form method="post" id="adForm" style="display:none">
+      <input type="hidden" name="auth_method" value="ad">
+      <div class="form-group">
+        <label>AD Kullanıcı Adı (sAMAccountName)</label>
+        <input type="text" name="username" placeholder="ör: jdoe" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>AD Şifresi</label>
+        <input type="password" name="password" placeholder="AD şifresi" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-login" style="background:linear-gradient(135deg,#1f6feb,#0d419d)">
+        🏢 AD ile Giriş Yap
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="footer-note">ReaR Manager v2.0 &nbsp;|&nbsp; Offline Kullanım</div>
+</div>
+
+{% if ad_enabled %}
+<script>
+function switchTab(tab) {
+  document.getElementById('tabLocal').classList.toggle('active', tab === 'local');
+  document.getElementById('tabAD').classList.toggle('active', tab === 'ad');
+  document.getElementById('localForm').style.display = tab === 'local' ? 'block' : 'none';
+  document.getElementById('adForm').style.display   = tab === 'ad'    ? 'block' : 'none';
+}
+</script>
+{% endif %}
+</body>
+</html>

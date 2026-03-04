@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Ansible — Toplu Host Ekle{% endblock %}
+{% block topbar_title %}🖥 Ansible — Toplu Host Ekle{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_hosts') }}" class="btn btn-secondary btn-sm">← Hostlar</a>
+  <a href="{{ url_for('ansible_host_add') }}" class="btn btn-outline btn-sm">➕ Tekli Ekle</a>
+{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data">
+
+<div class="grid-2">
+
+<!-- SOL: VERİ GİRİŞİ -->
+<div>
+  <div class="card">
+    <div class="card-header">📋 Host Listesi</div>
+    <div class="card-body" style="padding-bottom:10px">
+
+      <!-- Sekme -->
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button type="button" onclick="showTab('text')"
+          id="tab-text"
+          class="btn btn-primary btn-sm">✏ Metin Gir</button>
+        <button type="button" onclick="showTab('file')"
+          id="tab-file"
+          class="btn btn-outline btn-sm">📂 CSV Yükle</button>
+      </div>
+
+      <!-- Metin alanı -->
+      <div id="panel-text">
+        <textarea name="bulk_text" id="bulk_text" rows="18"
+          class="form-control font-mono"
+          style="font-size:12.5px;line-height:1.6;resize:vertical"
+          placeholder="# name, hostname, os_type, port, user, şifre, become/transport, grup, notlar
+# --- LİNUX ÖRNEKLER ---
+web01, 192.168.1.10, linux, 22, ubuntu, P@ss1, sudo, linux_prod,
+web02, 192.168.1.11, linux, 22, ubuntu, P@ss2, sudo, linux_prod,
+db01,  192.168.1.20, linux, 22, root,   DbP@ss, none, databases,
+# --- WINDOWS ÖRNEKLER ---
+win-dc01, 192.168.1.100, windows, 5985, Administrator, WinP@ss, ntlm, CORP.LOCAL, windows_domain,
+win-app01, 192.168.1.101, windows, 5985, svc-deploy, WinP@ss2, ntlm, CORP.LOCAL, windows_domain,
+win-wg01, 192.168.1.102, windows, 5985, Administrator, P@ss, basic,,workgroup_servers,"></textarea>
+        <div class="form-help" style="margin-top:6px">
+          Virgül veya sekme ayraçlı. <code>#</code> ile yorum satırı. Boş alan = varsayılan değer.
+        </div>
+      </div>
+
+      <!-- Dosya yükleme -->
+      <div id="panel-file" style="display:none">
+        <div style="border:2px dashed #30363d;border-radius:8px;padding:30px;text-align:center">
+          <div style="font-size:32px;margin-bottom:10px">📂</div>
+          <p style="color:#8b949e;margin-bottom:14px">CSV dosyası seçin (UTF-8)</p>
+          <input type="file" name="csv_file" accept=".csv,.txt"
+            class="form-control" style="max-width:300px;margin:0 auto">
+          <p class="form-help" style="margin-top:10px">
+            Aynı sütun sırası, başlık satırı opsiyonel.
+          </p>
+        </div>
+      </div>
+
+      <div style="margin-top:14px">
+        <button type="submit" class="btn btn-success" style="width:100%;padding:10px">
+          🚀 Toplu Ekle
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SAĞ: AYARLAR + FORMAT REFERANSI -->
+<div>
+
+  <!-- Varsayılan Değerler -->
+  <div class="card">
+    <div class="card-header">⚙ Varsayılan Değerler</div>
+    <div class="card-body">
+      <p class="form-help" style="margin-bottom:14px">
+        Satırda belirtilmeyen alanlar için kullanılır.
+      </p>
+
+      <div class="grid-2" style="gap:10px">
+        <div class="form-group" style="margin-bottom:10px">
+          <label>OS Tipi</label>
+          <select name="def_os_type" class="form-control form-control-sm">
+            <option value="linux">🐧 Linux</option>
+            <option value="windows">🪟 Windows</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Kullanıcı</label>
+          <input type="text" name="def_user" class="form-control form-control-sm"
+            value="ubuntu" placeholder="ubuntu">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Şifre</label>
+          <input type="text" name="def_pass" class="form-control form-control-sm"
+            placeholder="(boş bırakılabilir)">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>SSH Port</label>
+          <input type="number" name="def_ssh_port" class="form-control form-control-sm"
+            value="22">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>WinRM Port</label>
+          <input type="number" name="def_winrm_port" class="form-control form-control-sm"
+            value="5985">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Linux Become</label>
+          <select name="def_become" class="form-control form-control-sm">
+            <option value="sudo">sudo</option>
+            <option value="su">su</option>
+            <option value="none">none</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Become Kullanıcı</label>
+          <input type="text" name="def_become_user" class="form-control form-control-sm"
+            value="root">
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Become Şifre</label>
+          <select name="def_become_same" class="form-control form-control-sm">
+            <option value="1">SSH ile aynı</option>
+            <option value="0">Farklı (boş)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Win Transport</label>
+          <select name="def_transport" class="form-control form-control-sm">
+            <option value="ntlm">ntlm</option>
+            <option value="basic">basic</option>
+            <option value="kerberos">kerberos</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Varsayılan Grup</label>
+          <select name="def_group" class="form-control form-control-sm">
+            <option value="">— Grup Yok —</option>
+            {% for g in groups %}
+            <option value="{{ g.name }}">{{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Format Referansı -->
+  <div class="card">
+    <div class="card-header">📖 Format Referansı</div>
+    <div class="card-body" style="font-size:12px;color:#8b949e">
+
+      <p style="color:#c9d1d9;margin-bottom:6px"><strong>Linux Satır Formatı:</strong></p>
+      <pre class="code-block" style="font-size:10.5px;line-height:1.7">name, hostname, linux, port, user, şifre, become, grp, notlar
+
+Sütun  Açıklama               Örnek
+──────────────────────────────────────────
+1      Ad (zorunlu)            web01
+2      Hostname/IP (zorunlu)   192.168.1.10
+3      OS tipi (opsiyonel)     linux
+4      SSH port                22
+5      SSH kullanıcı           ubuntu
+6      SSH şifre               P@ss
+7      Become                  sudo / su / none
+8      Become kullanıcı        root
+9      Become şifre aynı mı    1 (evet) / 0 (hayır)
+10     Grup adı                linux_prod
+11     Notlar                  Web sunucusu</pre>
+
+      <p style="color:#c9d1d9;margin:12px 0 6px"><strong>Windows Satır Formatı:</strong></p>
+      <pre class="code-block" style="font-size:10.5px;line-height:1.7">name, hostname, windows, port, user, şifre, transport, domain, grp, notlar
+
+Sütun  Açıklama               Örnek
+──────────────────────────────────────────
+1      Ad (zorunlu)            win-app01
+2      Hostname/IP (zorunlu)   192.168.1.100
+3      OS tipi (opsiyonel)     windows
+4      WinRM port              5985
+5      Kullanıcı               Administrator
+6      Şifre                   WinP@ss
+7      Transport               ntlm / basic / kerberos
+8      Domain                  CORP.LOCAL
+9      Grup adı                windows_domain
+10     Notlar                  DC Sunucu</pre>
+
+      <p style="color:#c9d1d9;margin:12px 0 6px"><strong>Örnek CSV İçeriği:</strong></p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <span>Şablonu indir:</span>
+        <button type="button" onclick="downloadTemplate()"
+          class="btn btn-outline btn-sm">⬇ CSV Şablonu</button>
+      </div>
+
+      <p style="color:#6e7681;margin-top:10px;font-size:11px">
+        ✓ Grup adı mevcut bir gruba eşleşmezse atanmaz (hata olmaz).<br>
+        ✓ Aynı isimde host zaten varsa satır atlanır, hata gösterilir.<br>
+        ✓ os_type sütunu atlanırsa "Varsayılan OS Tipi" kullanılır.
+      </p>
+    </div>
+  </div>
+
+</div><!-- sag -->
+</div><!-- grid-2 -->
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(tab) {
+  document.getElementById('panel-text').style.display = tab === 'text' ? 'block' : 'none';
+  document.getElementById('panel-file').style.display = tab === 'file' ? 'block' : 'none';
+  document.getElementById('tab-text').className = 'btn btn-sm ' + (tab === 'text' ? 'btn-primary' : 'btn-outline');
+  document.getElementById('tab-file').className = 'btn btn-sm ' + (tab === 'file' ? 'btn-primary' : 'btn-outline');
+}
+
+function downloadTemplate() {
+  const lines = [
+    '# Ansible Host Toplu Ekleme Şablonu',
+    '# Linux: name, hostname, linux, port, user, sifre, become, become_user, become_same, grup, notlar',
+    '# Windows: name, hostname, windows, port, user, sifre, transport, domain, grup, notlar',
+    '#',
+    '# --- LİNUX ÖRNEKLER ---',
+    'web01, 192.168.1.10, linux, 22, ubuntu, P@ss1, sudo, root, 1, linux_prod, Web sunucusu 1',
+    'web02, 192.168.1.11, linux, 22, ubuntu, P@ss2, sudo, root, 1, linux_prod, Web sunucusu 2',
+    'db01,  192.168.1.20, linux, 22, root,   DbP@ss, none, root, 1, databases, Veritabani',
+    'app01, 192.168.1.30, linux, 2222, deploy, DeployP@ss, sudo, root, 0, app_servers, Uygulama',
+    '#',
+    '# --- WINDOWS ÖRNEKLER ---',
+    'win-dc01,  192.168.1.100, windows, 5985, Administrator, WinP@ss1, ntlm, CORP.LOCAL, windows_domain, Domain Controller',
+    'win-app01, 192.168.1.101, windows, 5985, CORP\\svc-deploy, WinP@ss2, ntlm, CORP.LOCAL, windows_domain, App Server',
+    'win-wg01,  192.168.1.102, windows, 5985, Administrator, LocalP@ss, basic,, workgroup_servers, Workgroup PC',
+  ].join('\n');
+
+  const blob = new Blob([lines], {type: 'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ansible_hosts_template.csv';
+  a.click();
+}
+
+// Enter tuşu ile text alanına örnek ekle (boşsa)
+const ta = document.getElementById('bulk_text');
+if (ta && !ta.value.trim()) {
+  // Placeholder zaten var, boş bırak
+}
+</script>
+{% endblock %}

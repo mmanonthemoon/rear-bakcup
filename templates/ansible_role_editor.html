@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Rol: {{ role.name }}{% endblock %}
+{% block topbar_title %}🎭 Rol Editörü — {{ role.name }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_roles') }}" class="btn btn-secondary btn-sm">← Geri</a>
+  <button onclick="saveAll()" class="btn btn-success btn-sm" id="saveAllBtn">💾 Tümünü Kaydet</button>
+{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom:14px;font-size:12px;color:#8b949e">
+  {% if role.description %}<span>{{ role.description }}</span>{% endif %}
+  <span class="font-mono" style="color:#6e7681;margin-left:8px">
+    → roles/{{ role.name }}/
+  </span>
+</div>
+
+<!-- SEKME SİSTEMİ (BÖLÜMLER) -->
+<div class="tabs" id="sectionTabs" style="margin-bottom:0;border-bottom:none">
+  {% set ordered_sections = ['tasks','handlers','vars','defaults','meta','templates','files'] %}
+  {% for sec in ordered_sections %}
+    {% if sections.get(sec) %}
+    <a href="#" class="tab-link {% if loop.first %}active{% endif %}"
+       onclick="switchSection('{{ sec }}'); return false"
+       id="tab-{{ sec }}">
+      {% if sec == 'tasks' %}⚙ tasks
+      {% elif sec == 'handlers' %}🔔 handlers
+      {% elif sec == 'vars' %}📦 vars
+      {% elif sec == 'defaults' %}📋 defaults
+      {% elif sec == 'meta' %}ℹ meta
+      {% elif sec == 'templates' %}📄 templates
+      {% elif sec == 'files' %}📁 files
+      {% else %}{{ sec }}{% endif %}
+      <span class="badge badge-secondary" style="font-size:9px;padding:2px 5px">
+        {{ sections[sec]|length }}
+      </span>
+    </a>
+    {% endif %}
+  {% endfor %}
+  <!-- Diğer bölümler -->
+  {% for sec, files in sections.items() %}
+    {% if sec not in ordered_sections %}
+    <a href="#" class="tab-link"
+       onclick="switchSection('{{ sec }}'); return false"
+       id="tab-{{ sec }}">{{ sec }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<!-- BÖLÜMLERİN İÇERİĞİ -->
+{% set ordered_sections = ['tasks','handlers','vars','defaults','meta','templates','files'] %}
+{% set all_sections = ordered_sections + (sections.keys() | list | reject('in', ordered_sections) | list) %}
+
+{% set first_sec = namespace(done=false) %}
+{% for sec in all_sections %}
+  {% if sections.get(sec) %}
+  {% set is_first = not first_sec.done %}
+  {% if is_first %}{% set first_sec.done = true %}{% endif %}
+
+  <div id="section-{{ sec }}" class="section-panel"
+       style="display: {{ 'block' if is_first else 'none' }}">
+
+    <!-- Her dosya için editör -->
+    {% for file in sections[sec] %}
+    <div class="card" style="margin-bottom:12px" id="file-card-{{ file.id }}">
+      <div class="card-header" style="padding:8px 14px;display:flex;align-items:center;gap:10px">
+        <span class="font-mono" style="font-size:13px;flex:1">
+          {{ sec }}/{{ file.filename }}
+        </span>
+        <button onclick="saveFile({{ file.id }}, {{ role.id }})"
+                class="btn btn-primary btn-sm" id="save-{{ file.id }}">
+          💾 Kaydet
+        </button>
+        <span id="save-status-{{ file.id }}" style="font-size:11px;color:#3fb950;display:none">
+          ✓ Kaydedildi
+        </span>
+      </div>
+      <div class="card-body" style="padding:0">
+        <textarea
+          id="editor-{{ file.id }}"
+          class="yaml-editor"
+          data-file-id="{{ file.id }}"
+          onkeydown="handleTabKey(event)"
+          style="width:100%;min-height:350px;font-family:'Courier New',Consolas,monospace;
+                 font-size:12.5px;line-height:1.6;background:#0d1117;color:#e6edf3;
+                 border:none;padding:14px 16px;resize:vertical;outline:none;
+                 box-sizing:border-box;tab-size:2"
+          spellcheck="false"
+        >{{ file.content }}</textarea>
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Yeni dosya ekle (tasks, handlers, vars, templates, files bölümleri için) -->
+    {% if sec in ['tasks','handlers','vars','defaults','templates','files'] %}
+    <div class="card" style="border:1px dashed #30363d;background:transparent">
+      <div class="card-body" style="padding:12px">
+        <form method="post" action="{{ url_for('ansible_role_add_file', rid=role.id) }}"
+              style="display:flex;gap:8px;align-items:center">
+          <input type="hidden" name="section" value="{{ sec }}">
+          <input type="text" name="filename" class="form-control" style="flex:1"
+                 placeholder="yeni_dosya.yml" required>
+          <button type="submit" class="btn btn-secondary btn-sm">+ Dosya Ekle</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endfor %}
+
+<!-- Boşsa genel mesaj -->
+{% if not sections %}
+<div class="card">
+  <div class="card-body empty-state">
+    <div class="empty-icon">🎭</div>
+    <p>Bu rol için henüz dosya yok.</p>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchSection(sec) {
+  // Tüm panelleri gizle
+  document.querySelectorAll('.section-panel').forEach(p => p.style.display = 'none');
+  // Seçileni göster
+  const panel = document.getElementById('section-' + sec);
+  if (panel) panel.style.display = 'block';
+  // Tab aktif durumu
+  document.querySelectorAll('.tab-link').forEach(t => t.classList.remove('active'));
+  const tab = document.getElementById('tab-' + sec);
+  if (tab) tab.classList.add('active');
+}
+
+function handleTabKey(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta    = e.target;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+    ta.selectionStart = ta.selectionEnd = start + 2;
+  }
+}
+
+async function saveFile(fileId, roleId) {
+  const ta      = document.getElementById('editor-' + fileId);
+  const btn     = document.getElementById('save-' + fileId);
+  const status  = document.getElementById('save-status-' + fileId);
+  const content = ta.value;
+
+  btn.textContent = '⏳';
+  btn.disabled    = true;
+
+  try {
+    const res = await fetch(`/ansible/roles/${roleId}/save-file`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body:    `file_id=${fileId}&content=${encodeURIComponent(content)}`
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.style.display = 'inline';
+      setTimeout(() => status.style.display = 'none', 2000);
+    } else {
+      alert('Kaydetme başarısız: ' + (data.error || 'Bilinmeyen hata'));
+    }
+  } catch (err) {
+    alert('Bağlantı hatası: ' + err.message);
+  } finally {
+    btn.textContent = '💾 Kaydet';
+    btn.disabled    = false;
+  }
+}
+
+async function saveAll() {
+  const editors = document.querySelectorAll('.yaml-editor');
+  const btn     = document.getElementById('saveAllBtn');
+  btn.textContent = '⏳ Kaydediliyor...';
+  btn.disabled    = true;
+
+  let ok = 0, fail = 0;
+  for (const ta of editors) {
+    const fid     = ta.dataset.fileId;
+    const roleId  = {{ role.id }};
+    const content = ta.value;
+    try {
+      const res = await fetch(`/ansible/roles/${roleId}/save-file`, {
+        method:  'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body:    `file_id=${fid}&content=${encodeURIComponent(content)}`
+      });
+      const data = await res.json();
+      data.ok ? ok++ : fail++;
+    } catch(e) { fail++; }
+  }
+
+  btn.textContent = `✓ ${ok} dosya kaydedildi` + (fail ? ` (${fail} hata)` : '');
+  btn.disabled    = false;
+  setTimeout(() => { btn.textContent = '💾 Tümünü Kaydet'; }, 2500);
+}
+</script>
+{% endblock %}

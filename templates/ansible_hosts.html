@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Ansible Hostlar{% endblock %}
+{% block topbar_title %}🖥 Ansible Hostlar{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_host_bulk_add') }}" class="btn btn-outline btn-sm">📋 Toplu Ekle</a>
+  <a href="{{ url_for('ansible_host_add') }}" class="btn btn-primary btn-sm">➕ Host Ekle</a>
+  <a href="{{ url_for('ansible_dashboard') }}" class="btn btn-secondary btn-sm">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Host Listesi
+    <span class="badge badge-secondary">{{ hosts|length }}</span>
+  </div>
+  <div class="table-wrap">
+    {% if hosts %}
+    <table>
+      <thead>
+        <tr>
+          <th>Ad / Hostname</th>
+          <th>OS</th>
+          <th>Bağlantı</th>
+          <th>Kimlik Doğrulama</th>
+          <th>Become / Domain</th>
+          <th>Gruplar</th>
+          <th>Durum</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in hosts %}
+        {% set h_groups = hg_map.get(h.id, []) %}
+        <tr>
+          <td>
+            <a href="{{ url_for('ansible_host_edit', hid=h.id) }}" class="link fw-bold">{{ h.name }}</a>
+            <div class="font-mono text-muted" style="font-size:11px">{{ h.hostname }}</div>
+          </td>
+          <td>
+            {% if h.os_type == 'windows' %}
+              <span style="font-size:18px">🪟</span><span class="text-muted" style="font-size:11px">Windows</span>
+            {% else %}
+              <span style="font-size:18px">🐧</span><span class="text-muted" style="font-size:11px">Linux</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px">
+            {% if h.os_type == 'windows' %}
+              <span class="badge badge-info">WinRM :{{ h.winrm_port }}</span><br>
+              <span class="text-muted" style="font-size:10px">{{ h.winrm_scheme }}/{{ h.win_transport }}</span>
+            {% else %}
+              <span class="badge badge-secondary">SSH :{{ h.ssh_port }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px">
+            <code class="text-muted">{{ h.ansible_user or '—' }}</code><br>
+            {% if h.auth_type == 'key' %}
+              <span class="badge badge-info" style="font-size:10px">🔑 Anahtar</span>
+            {% else %}
+              <span class="badge badge-secondary" style="font-size:10px">🔒 Şifre</span>
+            {% endif %}
+          </td>
+          <td style="font-size:11px">
+            {% if h.os_type == 'windows' %}
+              {% if h.win_domain %}
+                <span class="badge badge-warning" style="font-size:10px">🏢 {{ h.win_domain }}</span>
+              {% else %}
+                <span class="badge badge-secondary" style="font-size:10px">Workgroup</span>
+              {% endif %}
+            {% else %}
+              {% if h.become_method and h.become_method != 'none' %}
+                <span class="badge badge-warning" style="font-size:10px">⚡ {{ h.become_method }} → {{ h.become_user or 'root' }}</span>
+              {% else %}
+                <span class="badge badge-secondary" style="font-size:10px">—</span>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td style="font-size:11px">
+            {% for gid in h_groups %}
+              <span class="badge badge-info" style="font-size:10px">{{ group_map.get(gid, '?') }}</span>
+            {% endfor %}
+            {% if not h_groups %}
+              <span class="text-muted">ungrouped</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if h.active %}
+              <span class="badge badge-success">Aktif</span>
+            {% else %}
+              <span class="badge badge-secondary">Pasif</span>
+            {% endif %}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <button onclick="pingHost({{ h.id }}, '{{ h.name }}')"
+                class="btn btn-teal btn-sm" title="Bağlantı Testi">🔗 Ping</button>
+              <a href="{{ url_for('ansible_host_edit', hid=h.id) }}"
+                 class="btn btn-secondary btn-sm">Düzenle</a>
+              <button onclick="openConfirm('Host Sil','{{ h.name }} silinecek!','dh-{{ h.id }}')"
+                class="btn btn-danger btn-sm">Sil</button>
+              <form id="dh-{{ h.id }}" action="{{ url_for('ansible_host_delete', hid=h.id) }}"
+                method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🖥</div>
+      <p>Henüz host yok.</p>
+      <a href="{{ url_for('ansible_host_add') }}" class="btn btn-primary">➕ Host Ekle</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Ping sonuç modal -->
+<div id="pingModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.7);z-index:9999;display:none;align-items:center;justify-content:center">
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+    width:520px;max-width:95vw;padding:20px">
+    <div style="font-weight:700;font-size:15px;margin-bottom:12px" id="pingTitle">Ping</div>
+    <pre id="pingOutput" class="code-block" style="min-height:80px;max-height:250px;
+      overflow-y:auto;font-size:12px"></pre>
+    <div style="margin-top:14px;text-align:right">
+      <button onclick="document.getElementById('pingModal').style.display='none'"
+        class="btn btn-secondary">Kapat</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pingHost(hid, hname) {
+  const modal  = document.getElementById('pingModal');
+  const out    = document.getElementById('pingOutput');
+  const title  = document.getElementById('pingTitle');
+  out.textContent = '⟳ Bağlantı test ediliyor...';
+  title.textContent = '🔗 Ping: ' + hname;
+  modal.style.display = 'flex';
+
+  fetch('/api/ansible/ping-host', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({host_id: hid})
+  })
+  .then(r => {
+    if (r.status === 401) throw new Error('Oturum süresi doldu, sayfayı yenileyin.');
+    if (!r.ok) throw new Error('Sunucu hatası: ' + r.status);
+    return r.json();
+  })
+  .then(d => {
+    out.textContent = (d.ok ? '✓ BAŞARILI\n\n' : '✗ BAŞARISIZ\n\n') + (d.msg || '');
+    out.style.color = d.ok ? '#3fb950' : '#f85149';
+  })
+  .catch(e => { out.textContent = 'Hata: ' + e; out.style.color = '#f85149'; });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,3 @@
+---
+# Linux grubu varsayılan değişkenleri
+ansible_connection: ssh

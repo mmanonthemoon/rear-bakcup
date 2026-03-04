@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Kullanıcılar{% endblock %}
+{% block topbar_title %}👥 Kullanıcı Yönetimi{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('user_add') }}" class="btn btn-primary btn-sm">➕ Kullanıcı Ekle</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Kullanıcılar
+    <span class="badge badge-secondary">{{ users|length }}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Kullanıcı Adı</th>
+          <th>Ad Soyad</th>
+          <th>Rol</th>
+          <th>Auth Tipi</th>
+          <th>Durum</th>
+          <th>Son Giriş</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <span class="fw-bold">{{ u.username }}</span>
+            {% if u.is_builtin %}
+              <span class="badge badge-purple" style="font-size:10px">🔒 Yerleşik</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ u.full_name or '-' }}</td>
+          <td>
+            {% if u.role == 'admin' %}
+              <span class="badge badge-warning">👑 Yönetici</span>
+            {% elif u.role == 'user' %}
+              <span class="badge badge-info">👤 Kullanıcı</span>
+            {% else %}
+              <span class="badge badge-secondary">{{ u.role }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.auth_type == 'ad' %}
+              <span class="badge badge-purple">🏢 AD</span>
+            {% else %}
+              <span class="badge badge-secondary">🔒 Yerel</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.active %}
+              <span class="badge badge-success">✓ Aktif</span>
+            {% else %}
+              <span class="badge badge-danger">Pasif</span>
+            {% endif %}
+          </td>
+          <td class="text-muted td-nowrap" style="font-size:11px">
+            {{ (u.last_login or '-')[:16] }}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <a href="{{ url_for('user_edit', uid=u.id) }}" class="btn btn-secondary btn-sm">Düzenle</a>
+              {% if not u.is_builtin %}
+              <button
+                onclick="openConfirm('Kullanıcı Sil','{{ u.username }} kullanıcısı silinecek.','del-user-{{ u.id }}')"
+                class="btn btn-danger btn-sm">Sil</button>
+              <form id="del-user-{{ u.id }}" action="{{ url_for('user_delete', uid=u.id) }}"
+                method="post" style="display:none"></form>
+              {% else %}
+              <span class="text-muted" style="font-size:11px;padding:3px 8px">Silinemez</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>ℹ️ Bilgi:</strong>
+  Yerleşik <strong>admin</strong> hesabı silinemez ve her zaman yerel kimlik doğrulama kullanır.
+  AD kullanıcıları ilk girişlerinde otomatik olarak oluşturulur.
+</div>
+{% endblock %}

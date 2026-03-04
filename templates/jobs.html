@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}İş Listesi{% endblock %}
+{% block topbar_title %}📋 İş Listesi{% endblock %}
+
+{% block content %}
+<!-- FİLTRELER -->
+<div class="card">
+  <div class="card-body" style="padding:12px 16px">
+    <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:140px">
+        <label style="font-size:11px;color:#6e7681;display:block;margin-bottom:4px">SUNUCU</label>
+        <select name="server" class="form-select" style="padding:5px 10px;font-size:13px">
+          <option value="">Tümü</option>
+          {% for s in servers %}
+          <option value="{{ s.id }}" {% if server_filter == s.id|string %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="min-width:120px">
+        <label style="font-size:11px;color:#6e7681;display:block;margin-bottom:4px">TÜR</label>
+        <select name="type" class="form-select" style="padding:5px 10px;font-size:13px">
+          <option value="">Tümü</option>
+          <option value="backup"    {% if type_filter == 'backup' %}selected{% endif %}>Yedek</option>
+          <option value="install"   {% if type_filter == 'install' %}selected{% endif %}>Kurulum</option>
+          <option value="configure" {% if type_filter == 'configure' %}selected{% endif %}>Yapılandırma</option>
+        </select>
+      </div>
+      <div style="min-width:120px">
+        <label style="font-size:11px;color:#6e7681;display:block;margin-bottom:4px">DURUM</label>
+        <select name="status" class="form-select" style="padding:5px 10px;font-size:13px">
+          <option value="">Tümü</option>
+          <option value="success"  {% if status_filter == 'success' %}selected{% endif %}>Başarılı</option>
+          <option value="failed"   {% if status_filter == 'failed' %}selected{% endif %}>Başarısız</option>
+          <option value="running"  {% if status_filter == 'running' %}selected{% endif %}>Çalışıyor</option>
+          <option value="pending"  {% if status_filter == 'pending' %}selected{% endif %}>Bekliyor</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Filtrele</button>
+      <a href="{{ url_for('jobs_list') }}" class="btn btn-secondary btn-sm">Temizle</a>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    İşler
+    <span class="badge badge-secondary">{{ jobs|length }}</span>
+  </div>
+  <div class="table-wrap">
+    {% if jobs %}
+    <table>
+      <thead>
+        <tr><th>#</th><th>Sunucu</th><th>Tür</th><th>Tetikleyen</th><th>Durum</th><th>Başlangıç</th><th>Süre</th><th>Boyut</th><th>Log</th></tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td><a href="{{ url_for('job_detail', jid=j.id) }}" class="link">#{{ j.id }}</a></td>
+          <td>
+            <a href="{{ url_for('server_detail', sid=j.server_id) }}" class="link" style="font-size:12px">{{ j.server_label }}</a>
+            <div class="font-mono text-muted" style="font-size:10px">{{ j.hostname }}</div>
+          </td>
+          <td>
+            {% if j.job_type == 'backup' %}<span class="badge badge-info">💾 Yedek</span>
+            {% elif j.job_type == 'install' %}<span class="badge badge-secondary">📦 Kurulum</span>
+            {% elif j.job_type == 'configure' %}<span class="badge badge-warning">⚙️ Config</span>
+            {% else %}<span class="badge badge-secondary">{{ j.job_type }}</span>{% endif %}
+          </td>
+          <td>
+            {% if j.triggered_by == 'scheduler' %}<span class="badge badge-teal">⏰ Zamanl.</span>
+            {% elif j.triggered_by == 'manual-schedule' %}<span class="badge badge-teal">▶ Manuel Z.</span>
+            {% else %}<span class="badge badge-secondary">👤 Manuel</span>{% endif %}
+          </td>
+          <td>
+            {% if j.status == 'success' %}<span class="badge badge-success">✓ Başarılı</span>
+            {% elif j.status == 'failed' %}<span class="badge badge-danger">✗ Başarısız</span>
+            {% elif j.status in ('running','pending') or j.id in running_job_ids %}<span class="badge badge-running">⚡ Aktif</span>
+            {% elif j.status == 'cancelled' %}<span class="badge badge-warning">⏹ İptal</span>
+            {% else %}<span class="badge badge-secondary">{{ j.status }}</span>{% endif %}
+          </td>
+          <td class="text-muted td-nowrap" style="font-size:11px">{{ (j.started_at or '-')[:16] }}</td>
+          <td class="text-muted" style="font-size:11px">
+            {% if j.started_at and j.finished_at %}
+              {# Show duration roughly #}
+              -
+            {% else %}-{% endif %}
+          </td>
+          <td class="font-mono text-muted" style="font-size:12px">{{ j.backup_size or '-' }}</td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <a href="{{ url_for('job_detail', jid=j.id) }}" class="btn btn-outline btn-sm">Log</a>
+              <button onclick="openConfirm('Sil','#{{ j.id }} silinecek.','del-j-{{ j.id }}')"
+                class="btn btn-danger btn-sm">✕</button>
+              <form id="del-j-{{ j.id }}" action="{{ url_for('job_delete', jid=j.id) }}" method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><div class="empty-icon">📋</div><p>İş kaydı bulunamadı.</p></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

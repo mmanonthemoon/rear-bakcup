@@ -1,0 +1,27 @@
+---
+# Örnek Linux Playbook
+- name: Linux Sunucu Temel Kontroller
+  hosts: linux
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Sistem bilgisi al
+      debug:
+        msg: "{{ ansible_hostname }} - {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Disk kullanımı
+      command: df -h /
+      register: disk_info
+      changed_when: false
+
+    - name: Disk bilgisi göster
+      debug:
+        var: disk_info.stdout_lines
+
+    - name: Servisleri kontrol et
+      service_facts:
+
+    - name: Bellek bilgisi
+      debug:
+        msg: "Toplam RAM: {{ ansible_memtotal_mb }} MB | Boş: {{ ansible_memfree_mb }} MB"

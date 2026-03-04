@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{% block title %}{{ server.label }}{% endblock %}
+{% block topbar_title %}🖥️ {{ server.label }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('server_edit', sid=server.id) }}" class="btn btn-secondary btn-sm">✏️ Düzenle</a>
+  <a href="{{ url_for('servers_list') }}" class="btn btn-outline btn-sm">← Geri</a>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('servers_list') }}">Sunucular</a><span>›</span><span>{{ server.label }}</span>
+</div>
+
+<!-- ÜST SATIRLAR: BAĞLANTI TESTİ + HIZLI İŞLEMLER -->
+<div class="grid-3" style="margin-bottom:0">
+  <!-- Bilgiler -->
+  <div class="card">
+    <div class="card-header">ℹ️ Sunucu Bilgileri</div>
+    <div class="card-body" style="padding:14px">
+      <ul class="info-list">
+        <li><span class="info-key">Hostname</span><span class="info-val font-mono" style="font-size:12px">{{ server.hostname }}</span></li>
+        <li><span class="info-key">IP : Port</span><span class="info-val font-mono" style="font-size:12px">{{ server.ip_address }}:{{ server.ssh_port }}</span></li>
+        <li><span class="info-key">SSH User</span><span class="info-val font-mono" style="font-size:12px">{{ server.ssh_user }}</span></li>
+        <li><span class="info-key">Auth</span><span class="info-val">
+          {% if server.ssh_auth == 'key' %}<span class="badge badge-info">🔑 Anahtar</span>
+          {% else %}<span class="badge badge-secondary">🔒 Şifre</span>{% endif %}
+        </span></li>
+        <li><span class="info-key">Become</span><span class="info-val">
+          {% if server.become_method == 'sudo' %}
+            <span class="badge badge-warning">⚡ sudo → {{ server.become_user or 'root' }}</span>
+            {% if server.become_same_pass != 0 %}
+              <span class="text-muted" style="font-size:11px">aynı şifre</span>
+            {% else %}
+              <span class="text-muted" style="font-size:11px">ayrı şifre</span>
+            {% endif %}
+          {% elif server.become_method == 'su' %}
+            <span class="badge" style="background:#2d1a00;border:1px solid #f97316;color:#fb923c">
+              🔄 su → {{ server.become_user or 'root' }}
+            </span>
+            {% if server.become_same_pass != 0 %}
+              <span class="text-muted" style="font-size:11px">aynı şifre</span>
+            {% else %}
+              <span class="text-muted" style="font-size:11px">ayrı şifre</span>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-secondary">Yok (root SSH)</span>
+          {% endif %}
+        </span></li>
+        <li><span class="info-key">ReaR</span><span class="info-val">
+          {% if server.rear_installed and server.rear_configured %}<span class="badge badge-success">✓ Hazır</span>
+          {% elif server.rear_installed %}<span class="badge badge-warning">Kurulu/Yapılandırılmamış</span>
+          {% else %}<span class="badge badge-secondary">Kurulmadı</span>{% endif %}
+        </span></li>
+        <li><span class="info-key">OS</span><span class="info-val text-muted" style="font-size:11px">{{ (server.os_type or '-')[:60] }}</span></li>
+      </ul>
+      <hr class="divider">
+      <button class="btn btn-outline btn-sm" onclick="testConn({{ server.id }})">🔌 Bağlantı Test</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyKey({{ server.id }})">🔑 Key Kopyala</button>
+      <div id="connResult" style="margin-top:8px;display:none" class="code-block" style="max-height:80px"></div>
+    </div>
+  </div>
+
+  <!-- ReaR Kurulum -->
+  <div class="card">
+    <div class="card-header">📦 ReaR Kurulum</div>
+    <div class="card-body" style="padding:14px">
+      {% if server.rear_installed %}
+      <div class="alert alert-success" style="margin-bottom:10px;font-size:12px">✓ ReaR kurulu</div>
+      {% else %}
+      <div class="alert alert-warning" style="margin-bottom:10px;font-size:12px">ReaR kurulmamış</div>
+      {% endif %}
+      <p class="text-muted" style="font-size:12px;margin-bottom:10px">
+        Distro otomatik tespit edilir (Debian/Ubuntu/RHEL/Rocky/Alma/SUSE)
+      </p>
+      <form action="{{ url_for('server_install_rear', sid=server.id) }}" method="post">
+        <button class="btn btn-{% if server.rear_installed %}secondary{% else %}success{% endif %}">
+          {% if server.rear_installed %}🔄 Yeniden Kur{% else %}📦 ReaR Kur{% endif %}
+        </button>
+      </form>
+      <hr class="divider">
+      <a href="{{ url_for('server_configure', sid=server.id) }}" class="btn btn-primary">⚙️ Yapılandır</a>
+    </div>
+  </div>
+
+  <!-- Yedekleme -->
+  <div class="card">
+    <div class="card-header">💾 Yedekleme</div>
+    <div class="card-body" style="padding:14px">
+      {% if not server.rear_configured %}
+      <div class="alert alert-warning" style="margin-bottom:10px;font-size:12px">
+        ⚠️ Önce yapılandırın
+      </div>
+      {% endif %}
+      <p class="text-muted" style="font-size:12px;margin-bottom:10px">
+        <strong>NFS:</strong>
+        {% if cfg.nfs_mode == 'separate' and cfg.nfs_server_ip %}
+          {{ cfg.nfs_server_ip }} <span class="badge badge-purple">Ayrı NFS</span>
+        {% else %}
+          {{ cfg.central_ip }} <span class="badge badge-secondary">Merkezi</span>
+        {% endif %}
+      </p>
+      <form action="{{ url_for('server_backup', sid=server.id) }}" method="post" style="margin-bottom:6px">
+        <input type="hidden" name="backup_type" value="mkbackup">
+        <button class="btn btn-success" style="width:100%">💾 Tam Yedek (mkbackup)</button>
+      </form>
+      <form action="{{ url_for('server_backup', sid=server.id) }}" method="post">
+        <input type="hidden" name="backup_type" value="mkrescue">
+        <button class="btn btn-secondary" style="width:100%">💿 Sadece ISO (mkrescue)</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ANSİBLE ENTEGRASYONU -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🤖 Ansible Entegrasyonu</span>
+    {% if ansible_host %}
+      <a href="{{ url_for('ansible_host_edit', hid=ansible_host.id) }}"
+         class="btn btn-secondary btn-sm">✏️ Ansible Host Düzenle</a>
+    {% endif %}
+  </div>
+  <div class="card-body" style="padding:14px">
+    {% if ansible_host %}
+      <!-- Bağlı durum -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <span class="badge badge-success" style="font-size:13px;padding:6px 12px">🔗 Bağlı</span>
+        <div>
+          <strong>{{ ansible_host.name }}</strong>
+          <span class="text-muted" style="font-size:12px;margin-left:8px">{{ ansible_host.hostname }}</span>
+          <div style="font-size:11px;color:#6e7681;margin-top:2px">
+            SSH :{{ ansible_host.ssh_port }} | {{ ansible_host.ansible_user }}
+            {% if ansible_host.become_method and ansible_host.become_method != 'none' %}
+              | become: {{ ansible_host.become_method }} → {{ ansible_host.become_user or 'root' }}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="{{ url_for('ansible_hosts') }}" class="btn btn-outline btn-sm">
+          📋 Ansible Hostlar
+        </a>
+        <form action="{{ url_for('server_ansible_unlink', sid=server.id) }}" method="post"
+              style="display:inline"
+              onsubmit="return confirm('Bağlantıyı kaldırmak istediğinizden emin misiniz?\nAnsible hostu silinmez, sadece bağlantı kopar.')">
+          <button class="btn btn-outline btn-sm" style="color:#f85149;border-color:#f85149">
+            🔗 Bağlantıyı Kaldır
+          </button>
+        </form>
+      </div>
+    {% else %}
+      <!-- Bağlı değil -->
+      <p class="text-muted" style="font-size:13px;margin-bottom:12px">
+        Bu sunucu henüz bir Ansible hostuna bağlı değil.<br>
+        Bağlantı kurarak Ansible playbooklarını bu sunucuya ayrıca tanımlamadan çalıştırabilirsiniz.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <!-- Otomatik oluştur -->
+        <form action="{{ url_for('server_ansible_auto_add', sid=server.id) }}" method="post">
+          <button class="btn btn-teal">
+            ✨ Ansible'a Otomatik Ekle
+          </button>
+        </form>
+        <!-- Mevcut hosta bağla -->
+        {% if all_ansible_hosts %}
+        <button class="btn btn-outline btn-sm"
+                onclick="document.getElementById('linkExistingPanel').style.display='block';this.style.display='none'">
+          🔗 Mevcut Hosta Bağla
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Mevcut hosta bağla paneli -->
+      {% if all_ansible_hosts %}
+      <div id="linkExistingPanel" style="display:none;background:#161b22;
+           border:1px solid #30363d;border-radius:6px;padding:12px;margin-top:8px">
+        <form action="{{ url_for('server_ansible_link', sid=server.id) }}" method="post"
+              style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="margin:0;flex:1;min-width:200px">
+            <label style="font-size:12px;color:#8b949e">Ansible Host Seç</label>
+            <select name="ansible_host_id" class="form-select" required>
+              <option value="">— Seçin —</option>
+              {% for ah in all_ansible_hosts %}
+                <option value="{{ ah.id }}">{{ ah.name }} ({{ ah.hostname }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Bağla</button>
+          <button type="button" class="btn btn-secondary btn-sm"
+                  onclick="document.getElementById('linkExistingPanel').style.display='none';
+                  this.closest('form').previousElementSibling.previousElementSibling.style.display='inline-block'">
+            İptal
+          </button>
+        </form>
+        <div class="text-muted" style="font-size:11px;margin-top:6px">
+          💡 Otomatik ekleme: SSH bilgileri bu sunucudan kopyalanarak yeni Ansible hostu oluşturulur.
+        </div>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<!-- ZAMANLAMA YÖNETİMİ -->
+<div class="card">
+  <div class="card-header">
+    ⏰ Zamanlanmış Yedekleme
+    <button class="btn btn-teal btn-sm" onclick="document.getElementById('addSchedModal').classList.add('open')">
+      ➕ Zamanlama Ekle
+    </button>
+  </div>
+  <div class="table-wrap">
+    {% if schedules %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Tür</th>
+          <th>Zamanlama (Cron)</th>
+          <th>Açıklama</th>
+          <th>Durum</th>
+          <th>Son Çalışma</th>
+          <th>Sonraki Çalışma</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in schedules %}
+        <tr>
+          <td class="text-muted">#{{ s.id }}</td>
+          <td>
+            {% if s.backup_type == 'mkbackup' %}<span class="badge badge-info">💾 mkbackup</span>
+            {% else %}<span class="badge badge-secondary">💿 mkrescue</span>{% endif %}
+          </td>
+          <td class="font-mono" style="font-size:12px">
+            {{ s.cron_minute }} {{ s.cron_hour }} {{ s.cron_dom }} {{ s.cron_month }} {{ s.cron_dow }}
+          </td>
+          <td class="text-muted" style="font-size:12px" id="cronDesc{{ s.id }}">
+            {{ _cron_describe(s.cron_minute, s.cron_hour, s.cron_dom, s.cron_month, s.cron_dow) if _cron_describe is defined else '' }}
+          </td>
+          <td>
+            {% if s.enabled %}<span class="badge badge-success">✓ Aktif</span>
+            {% else %}<span class="badge badge-secondary">Pasif</span>{% endif %}
+          </td>
+          <td class="text-muted td-nowrap" style="font-size:11px">
+            {{ s.last_run or '-' }}
+            {% if s.last_status == 'success' %}<span class="text-success">✓</span>
+            {% elif s.last_status == 'failed' %}<span class="text-danger">✗</span>{% endif %}
+          </td>
+          <td class="text-muted td-nowrap" style="font-size:11px">
+            {{ sched_next.get(s.id) or '-' }}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <form action="{{ url_for('schedule_run_now', scid=s.id) }}" method="post" style="display:inline">
+                <button class="btn btn-primary btn-sm" title="Şimdi Çalıştır">▶</button>
+              </form>
+              <form action="{{ url_for('schedule_toggle', scid=s.id) }}" method="post" style="display:inline">
+                <button class="btn btn-{% if s.enabled %}warning{% else %}success{% endif %} btn-sm">
+                  {% if s.enabled %}⏸{% else %}▶{% endif %}
+                </button>
+              </form>
+              <button onclick="openConfirm('Zamanlamayı Sil','#{{ s.id }} zamanlaması silinecek.','del-sched-{{ s.id }}')"
+                class="btn btn-danger btn-sm">✕</button>
+              <form id="del-sched-{{ s.id }}" action="{{ url_for('schedule_delete', scid=s.id) }}" method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="padding:24px">
+      <div class="empty-icon" style="font-size:30px">⏰</div>
+      <p>Henüz zamanlanmış yedekleme yok.</p>
+      <button class="btn btn-teal" style="margin-top:8px"
+        onclick="document.getElementById('addSchedModal').classList.add('open')">
+        ➕ İlk Zamanlamayı Ekle
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+<!-- YEDEK DOSYALARI -->
+<div class="card">
+  <div class="card-header">📁 Yedek Dosyaları
+    <span class="text-muted" style="font-size:11px">/srv/rear-backups/{{ server.hostname }}/</span>
+  </div>
+  <div class="table-wrap">
+    {% if backup_files %}
+    <table>
+      <thead><tr><th>Dosya</th><th>Boyut</th><th>Tarih</th></tr></thead>
+      <tbody>
+        {% for f in backup_files %}
+        <tr>
+          <td class="font-mono" style="font-size:11px">{{ f.name }}</td>
+          <td class="text-muted" style="font-size:12px">{{ f.size }}</td>
+          <td class="text-muted td-nowrap" style="font-size:11px">{{ f.mtime }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="padding:20px"><p>Henüz yedek dosyası yok.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- İŞ GEÇMİŞİ -->
+<div class="card">
+  <div class="card-header">📋 Son İşler <a href="{{ url_for('jobs_list') }}?server={{ server.id }}" class="btn btn-outline btn-sm">Tümü</a></div>
+  <div class="table-wrap">
+    {% if jobs %}
+    <table>
+      <thead><tr><th>#</th><th>Tür</th><th>Durum</th><th>Başlangıç</th><th>Boyut</th></tr></thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td><a href="{{ url_for('job_detail', jid=j.id) }}" class="link">#{{ j.id }}</a>
+            {% if j.triggered_by == 'scheduler' %}<span class="badge badge-teal" style="font-size:10px">⏰</span>{% endif %}
+          </td>
+          <td>
+            {% if j.job_type == 'backup' %}<span class="badge badge-info" style="font-size:10px">Yedek</span>
+            {% elif j.job_type == 'install' %}<span class="badge badge-secondary" style="font-size:10px">Kurulum</span>
+            {% elif j.job_type == 'configure' %}<span class="badge badge-warning" style="font-size:10px">Config</span>
+            {% else %}<span class="badge badge-secondary" style="font-size:10px">{{ j.job_type }}</span>{% endif %}
+          </td>
+          <td>
+            {% if j.status == 'success' %}<span class="badge badge-success">✓</span>
+            {% elif j.status == 'failed' %}<span class="badge badge-danger">✗</span>
+            {% elif j.status in ('running','pending') %}<span class="badge badge-running">⚡</span>
+            {% else %}<span class="badge badge-secondary">{{ j.status }}</span>{% endif %}
+          </td>
+          <td class="text-muted td-nowrap" style="font-size:11px">{{ (j.started_at or '-')[:16] }}</td>
+          <td class="font-mono text-muted" style="font-size:12px">{{ j.backup_size or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="padding:20px"><p>Henüz iş yok.</p></div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<!-- SİL -->
+<form id="delServerForm" action="{{ url_for('server_delete', sid=server.id) }}" method="post" style="display:none"></form>
+<div style="text-align:right;margin-top:4px">
+  <button onclick="openConfirm('Sunucu Sil','{{ server.label }} ve tüm kayıtları silinecek!','delServerForm')"
+    class="btn btn-danger btn-sm">🗑️ Sunucuyu Sil</button>
+</div>
+
+<!-- ZAMANLAMA EKLEME MODALİ -->
+<div class="modal-overlay" id="addSchedModal">
+  <div class="modal" style="max-width:540px">
+    <h3>⏰ Yeni Zamanlama</h3>
+    <form method="post" action="{{ url_for('schedule_add', sid=server.id) }}">
+      <div class="form-group">
+        <label>Yedekleme Türü</label>
+        <select name="backup_type" class="form-select">
+          <option value="mkbackup">💾 mkbackup (Tam Yedek)</option>
+          <option value="mkrescue">💿 mkrescue (Sadece ISO)</option>
+        </select>
+      </div>
+
+      <div class="alert alert-info" style="font-size:12px;margin-bottom:12px">
+        <strong>Cron Formatı:</strong> dakika saat gün_ay ay gün_hafta<br>
+        Örnek: <code>0 2 * * *</code> = Her gece 02:00<br>
+        Örnek: <code>0 3 * * 0</code> = Her Pazar 03:00<br>
+        Örnek: <code>30 1 1 * *</code> = Her ayın 1'i 01:30
+      </div>
+
+      <div style="font-size:12px;font-weight:600;color:#8b949e;margin-bottom:8px">Hazır Şablonlar:</div>
+      <div class="cron-presets" style="margin-bottom:14px">
+        <span class="cron-preset" onclick="setCron('0','2','*','*','*')">Her gece 02:00</span>
+        <span class="cron-preset" onclick="setCron('0','3','*','*','0')">Pazar 03:00</span>
+        <span class="cron-preset" onclick="setCron('0','1','1','*','*')">Her ay 1'i</span>
+        <span class="cron-preset" onclick="setCron('0','*/6','*','*','*')">Her 6 saatte</span>
+        <span class="cron-preset" onclick="setCron('0','0','*','*','1-5')">Hafta içi gece</span>
+        <span class="cron-preset" onclick="setCron('0','4','*','*','6')">Cumartesi 04:00</span>
+      </div>
+
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Dakika</label>
+          <input type="text" name="cron_minute" id="cron_minute" class="form-control" value="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Saat</label>
+          <input type="text" name="cron_hour" id="cron_hour" class="form-control" value="2" placeholder="2">
+        </div>
+        <div class="form-group">
+          <label>Gün (ay)</label>
+          <input type="text" name="cron_dom" id="cron_dom" class="form-control" value="*" placeholder="*">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ay</label>
+          <input type="text" name="cron_month" id="cron_month" class="form-control" value="*" placeholder="*">
+        </div>
+        <div class="form-group">
+          <label>Gün (hafta) <span class="text-muted" style="font-weight:400">0=Pazar, 1=Pazartesi...</span></label>
+          <input type="text" name="cron_dow" id="cron_dow" class="form-control" value="*" placeholder="*">
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button type="submit" class="btn btn-teal">⏰ Zamanlamayı Kaydet</button>
+        <button type="button" class="btn btn-secondary"
+          onclick="document.getElementById('addSchedModal').classList.remove('open')">İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function testConn(sid) {
+  const el = document.getElementById('connResult');
+  el.style.display = 'block';
+  el.style.color = '#8b949e';
+  el.textContent = '⏳ Test ediliyor...';
+  fetch('/servers/' + sid + '/test', {method:'POST'})
+    .then(r => {
+      if (!r.ok && r.status === 401) throw new Error('Oturum süresi doldu, sayfayı yenileyin.');
+      return r.json();
+    })
+    .then(d => {
+      el.style.color = d.ok ? '#3fb950' : '#f85149';
+      el.textContent = (d.ok ? '✓ OK: ' : '✗ HATA: ') + d.msg;
+    })
+    .catch(e => { el.style.color='#f85149'; el.textContent='Hata: '+e; });
+}
+
+function copyKey(sid) {
+  const el = document.getElementById('connResult');
+  el.style.display = 'block';
+  el.style.color = '#8b949e';
+  el.textContent = '⏳ Kopyalanıyor...';
+  fetch('/settings/copy-key/' + sid, {method:'POST'})
+    .then(r => {
+      if (!r.ok && r.status === 401) throw new Error('Oturum süresi doldu, sayfayı yenileyin.');
+      return r.json();
+    })
+    .then(d => {
+      el.style.color = d.ok ? '#3fb950' : '#f85149';
+      el.textContent = d.msg;
+    })
+    .catch(e => { el.style.color='#f85149'; el.textContent='Hata: '+e; });
+}
+
+function setCron(min, hr, dom, month, dow) {
+  document.getElementById('cron_minute').value = min;
+  document.getElementById('cron_hour').value   = hr;
+  document.getElementById('cron_dom').value    = dom;
+  document.getElementById('cron_month').value  = month;
+  document.getElementById('cron_dow').value    = dow;
+}
+
+// Modal kapat
+document.getElementById('addSchedModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+</script>
+{% endblock %}

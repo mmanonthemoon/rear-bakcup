@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('servers_list') }}" class="btn btn-secondary btn-sm">← Geri</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:760px">
+<div class="card">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+    <form method="post">
+
+      <!-- ── TEMEL BİLGİLER ────────────────────────────────── -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:10px">Temel Bilgiler</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Etiket <span class="req">*</span></label>
+          <input type="text" name="label" class="form-control"
+            value="{{ server.label if server else '' }}"
+            placeholder="ör: prod-web-01" required>
+        </div>
+        <div class="form-group">
+          <label>Hostname <span class="req">*</span></label>
+          <input type="text" name="hostname" class="form-control"
+            value="{{ server.hostname if server else '' }}"
+            placeholder="ör: web01.example.com" required>
+          <div class="form-help">Yedek dizin adı olarak kullanılır</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>IP Adresi <span class="req">*</span></label>
+          <input type="text" name="ip_address" class="form-control"
+            value="{{ server.ip_address if server else '' }}"
+            placeholder="192.168.1.100" required>
+        </div>
+        <div class="form-group">
+          <label>SSH Port</label>
+          <input type="number" name="ssh_port" class="form-control"
+            value="{{ server.ssh_port if server else '22' }}">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── SSH KİMLİK DOĞRULAMA ──────────────────────────── -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:10px">SSH Bağlantısı</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>SSH Kullanıcı <span class="req">*</span></label>
+          <input type="text" name="ssh_user" class="form-control"
+            value="{{ server.ssh_user if server else 'ubuntu' }}"
+            placeholder="ör: ubuntu, ec2-user, admin" required>
+          <div class="form-help">Root olmayan kullanıcı olabilir; aşağıda become ayarlanır</div>
+        </div>
+        <div class="form-group">
+          <label>Kimlik Doğrulama</label>
+          <select name="ssh_auth" class="form-select" id="sshAuthSel" onchange="toggleAuth()">
+            <option value="password" {% if not server or server.ssh_auth == 'password' %}selected{% endif %}>🔒 Şifre</option>
+            <option value="key"      {% if server and server.ssh_auth == 'key' %}selected{% endif %}>🔑 SSH Anahtar</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group" id="pwField">
+        <label>SSH Şifresi</label>
+        <input type="password" name="ssh_password" class="form-control"
+          value="{{ server.ssh_password if server else '' }}"
+          placeholder="SSH kullanıcı şifresi" autocomplete="new-password">
+        <div class="form-help">
+          Anahtar ile bağlanıyorsanız boş bırakın.
+          Become şifresi farklıysa aşağıdaki alanı doldurun.
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── BECOME / YETKİ YÜKSELTMESİ ──────────────────── -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:6px">
+        Privilege Escalation (Become)
+      </div>
+      <div class="alert alert-info" style="font-size:12px;margin-bottom:12px">
+        <strong>Ne zaman kullanılır?</strong>
+        SSH kullanıcısı root değilse (ör: <code>ubuntu</code>, <code>centos</code>, <code>ec2-user</code>)
+        ReaR kurulumu ve yedekleme için root yetkisi gerekir.
+        Sudo veya su yöntemiyle otomatik yetki yükseltme yapılır.
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Become Yöntemi</label>
+          <select name="become_method" class="form-select" id="becomeMethodSel"
+            onchange="toggleBecome()">
+            <option value="none" {% if not server or server.become_method == 'none' %}selected{% endif %}>
+              🚫 Yok — SSH kullanıcısı zaten root
+            </option>
+            <option value="sudo" {% if server and server.become_method == 'sudo' %}selected{% endif %}>
+              ⚡ sudo (önerilen — Ubuntu/Debian/RHEL)
+            </option>
+            <option value="su" {% if server and server.become_method == 'su' %}selected{% endif %}>
+              🔄 su - (root şifre bilinen sistemler)
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Become Hedef Kullanıcı</label>
+          <input type="text" name="become_user" class="form-control" id="becomeUserField"
+            value="{{ server.become_user if server else 'root' }}"
+            placeholder="root" oninput="updateBecomeSummary()">
+          <div class="form-help">Neredeyse her zaman <code>root</code></div>
+        </div>
+      </div>
+
+      <!-- Become şifre bölümü -->
+      <div id="becomePassSection" style="display:none">
+        <div class="form-group">
+          <div class="form-check">
+            <input type="checkbox" name="become_same_pass" id="becomeSamePass" value="1"
+              {% if not server or server.become_same_pass != 0 %}checked{% endif %}
+              onchange="toggleBecomePass()">
+            <label for="becomeSamePass" style="margin-bottom:0;cursor:pointer">
+              <strong>Become şifresi = SSH şifresi ile aynı</strong>
+            </label>
+          </div>
+          <div class="form-help" style="margin-left:22px">
+            Ubuntu/Debian varsayılanında SSH kullanıcı şifresi sudo için de kullanılır.
+            Root şifresi farklıysa işareti kaldırın.
+          </div>
+        </div>
+
+        <div class="form-group" id="becomePassField" style="display:none">
+          <label>Become Şifresi <span class="text-warning">(SSH'dan farklıysa)</span></label>
+          <input type="password" name="become_password" class="form-control"
+            value="{{ server.become_password if server else '' }}"
+            placeholder="sudo / su şifresi" autocomplete="new-password">
+          <div class="form-help">
+            Yalnızca SSH şifresinden farklıysa doldurun.
+            <code>NOPASSWD</code> sudoers kuralı varsa boş bırakın.
+          </div>
+        </div>
+
+        <!-- Canlı özet -->
+        <div id="becomeSummary"
+             style="background:#0d1117;border:1px solid #388bfd;border-radius:6px;
+                    padding:8px 12px;font-family:'Courier New',monospace;font-size:11.5px;
+                    color:#79c0ff;margin-bottom:14px;line-height:1.6">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── HARIÇ DİZİNLER & NOTLAR ───────────────────────── -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e7681;
+                  text-transform:uppercase;margin-bottom:10px">Ek Ayarlar</div>
+
+      <div class="form-group">
+        <label>Bu Sunucuya Özel Hariç Tutulacak Dizinler</label>
+        <textarea name="exclude_dirs" class="form-control" rows="3"
+          placeholder="/home/user/.cache/*&#10;/var/lib/docker/*">{{ server.exclude_dirs if server else '' }}</textarea>
+        <div class="form-help">
+          Her satıra bir yol. Global hariç dizinler
+          (<a href="{{ url_for('settings_page') }}" class="link">Ayarlar</a>'dan) de config'e eklenir.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Notlar</label>
+        <textarea name="notes" class="form-control" rows="2"
+          placeholder="Bu sunucu hakkında notlar...">{{ server.notes if server else '' }}</textarea>
+      </div>
+
+      <div class="btn-group">
+        <button type="submit" class="btn btn-primary">
+          {% if server %}💾 Güncelle{% else %}➕ Ekle{% endif %}
+        </button>
+        <a href="{{ url_for('servers_list') }}" class="btn btn-secondary">İptal</a>
+        {% if not server %}
+        <a href="{{ url_for('server_bulk_add') }}" class="btn btn-teal">📋 Toplu Ekle</a>
+        {% endif %}
+      </div>
+
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAuth() {
+  document.getElementById('pwField').style.display =
+    document.getElementById('sshAuthSel').value === 'password' ? 'block' : 'none';
+}
+
+function toggleBecome() {
+  const method = document.getElementById('becomeMethodSel').value;
+  document.getElementById('becomePassSection').style.display =
+    method === 'none' ? 'none' : 'block';
+  updateBecomeSummary();
+}
+
+function toggleBecomePass() {
+  const same = document.getElementById('becomeSamePass').checked;
+  document.getElementById('becomePassField').style.display = same ? 'none' : 'block';
+  updateBecomeSummary();
+}
+
+function updateBecomeSummary() {
+  const method = document.getElementById('becomeMethodSel').value;
+  if (method === 'none') {
+    document.getElementById('becomeSummary').textContent = '';
+    return;
+  }
+  const user = (document.getElementById('becomeUserField').value || 'root').trim();
+  const same = document.getElementById('becomeSamePass')?.checked;
+  const passDesc = same
+    ? '→ Şifre: SSH şifresi kullanılacak'
+    : '→ Şifre: Become şifresi kullanılacak';
+  const sum = document.getElementById('becomeSummary');
+  if (method === 'sudo') {
+    sum.textContent =
+      `Komut sarması: echo '<şifre>' | sudo -S -p '' -H -u ${user} bash -c '<komut>'\n${passDesc}`;
+  } else {
+    sum.textContent =
+      `Komut sarması: su - ${user} -c '<komut>'   (PTY üzerinden şifre gönderilir)\n${passDesc}`;
+  }
+}
+
+toggleAuth();
+toggleBecome();
+toggleBecomePass();
+</script>
+{% endblock %}

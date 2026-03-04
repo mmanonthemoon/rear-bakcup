@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Sunucular{% endblock %}
+{% block topbar_title %}🖥️ Sunucu Listesi{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('server_add') }}" class="btn btn-primary btn-sm">➕ Tekli Ekle</a>
+  <a href="{{ url_for('server_bulk_add') }}" class="btn btn-teal btn-sm">📋 Toplu Ekle</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Yönetilen Sunucular
+    <span class="badge badge-secondary">{{ servers|length }}</span>
+  </div>
+  <div class="table-wrap">
+    {% if servers %}
+    <table>
+      <thead>
+        <tr>
+          <th>Etiket / Hostname</th>
+          <th>IP : Port</th>
+          <th>SSH</th>
+          <th>Become</th>
+          <th>ReaR</th>
+          <th>Ansible</th>
+          <th>OS</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in servers %}
+        <tr>
+          <td>
+            <a href="{{ url_for('server_detail', sid=s.id) }}" class="link fw-bold">{{ s.label }}</a>
+            <div class="font-mono text-muted" style="font-size:11px">{{ s.hostname }}</div>
+          </td>
+          <td class="font-mono" style="font-size:12px">{{ s.ip_address }}:{{ s.ssh_port }}</td>
+          <td>
+            <span class="text-muted" style="font-size:12px">{{ s.ssh_user }}</span><br>
+            {% if s.ssh_auth == 'key' %}
+              <span class="badge badge-info" style="font-size:10px">🔑 Anahtar</span>
+            {% else %}
+              <span class="badge badge-secondary" style="font-size:10px">🔒 Şifre</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.become_method == 'sudo' %}
+              <span class="badge badge-warning" style="font-size:10px">⚡ sudo → {{ s.become_user or 'root' }}</span>
+            {% elif s.become_method == 'su' %}
+              <span class="badge badge-orange" style="font-size:10px;background:#2d1a00;border:1px solid #f97316;color:#fb923c">
+                🔄 su → {{ s.become_user or 'root' }}
+              </span>
+            {% else %}
+              <span class="badge badge-secondary" style="font-size:10px">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.rear_installed and s.rear_configured %}
+              <span class="badge badge-success">✓ Hazır</span>
+            {% elif s.rear_installed %}
+              <span class="badge badge-warning">Kurulu</span>
+            {% else %}
+              <span class="badge badge-secondary">Kurulmadı</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set ah = ansible_map.get(s.id) %}
+            {% if ah %}
+              <span class="badge badge-teal" style="font-size:10px" title="{{ ah.name }}">
+                🔗 {{ ah.name }}
+              </span>
+            {% else %}
+              <span class="badge badge-secondary" style="font-size:10px">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:11px;color:#6e7681;max-width:150px;
+                     overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ s.os_type or '-' }}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <a href="{{ url_for('server_detail', sid=s.id) }}"
+                 class="btn btn-outline btn-sm">Detay</a>
+              <a href="{{ url_for('server_edit', sid=s.id) }}"
+                 class="btn btn-secondary btn-sm">Düzenle</a>
+              <button onclick="openConfirm('Sunucu Sil',
+                '{{ s.label }} ve tüm kayıtları silinecek!','del-s-{{ s.id }}')"
+                class="btn btn-danger btn-sm">Sil</button>
+              <form id="del-s-{{ s.id }}"
+                action="{{ url_for('server_delete', sid=s.id) }}"
+                method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🖥️</div>
+      <p>Henüz sunucu yok.</p>
+      <div class="btn-group" style="justify-content:center;margin-top:12px">
+        <a href="{{ url_for('server_add') }}" class="btn btn-primary">➕ Tekli Ekle</a>
+        <a href="{{ url_for('server_bulk_add') }}" class="btn btn-teal">📋 Toplu Ekle</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

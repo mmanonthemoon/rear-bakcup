@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Ansible — Çalışma Geçmişi{% endblock %}
+{% block topbar_title %}📋 Ansible Çalışma Geçmişi{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_dashboard') }}" class="btn btn-secondary btn-sm">← Dashboard</a>
+  <a href="{{ url_for('ansible_playbooks') }}" class="btn btn-primary btn-sm">▶ Playbooklar</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Tüm Çalışmalar
+    <span class="badge badge-secondary">{{ runs|length }}</span>
+  </div>
+  <div class="table-wrap">
+    {% if runs %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Playbook</th>
+          <th>Limit / Etiket</th>
+          <th>Ekstra Değişkenler</th>
+          <th>Başlangıç</th>
+          <th>Bitiş</th>
+          <th>Durum</th>
+          <th>Çıkış</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td class="font-mono text-muted" style="font-size:11px">{{ r.id }}</td>
+          <td>
+            <a href="{{ url_for('ansible_run_detail', rid=r.id) }}" class="link fw-bold">
+              {{ r.playbook_name or r.pb_file or '?' }}
+            </a>
+          </td>
+          <td class="font-mono text-muted" style="font-size:11px">
+            {{ r.limit_hosts or '<span class="badge badge-secondary" style="font-size:9px">tümü</span>' | safe }}
+          </td>
+          <td class="font-mono text-muted" style="font-size:10px;max-width:120px;
+               overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ r.extra_vars or '—' }}
+          </td>
+          <td class="text-muted" style="font-size:11px">
+            {{ (r.started_at or '—')[:16] }}
+          </td>
+          <td class="text-muted" style="font-size:11px">
+            {{ (r.finished_at or '—')[:16] }}
+          </td>
+          <td>
+            {% if r.status == 'success' %}
+              <span class="badge badge-success">✓ Başarılı</span>
+            {% elif r.status == 'failed' %}
+              <span class="badge badge-danger">✗ Başarısız</span>
+            {% elif r.status == 'running' %}
+              <span class="badge badge-warning">⟳ Çalışıyor</span>
+            {% elif r.status == 'cancelled' %}
+              <span class="badge badge-secondary">⊘ İptal</span>
+            {% else %}
+              <span class="badge badge-secondary">{{ r.status }}</span>
+            {% endif %}
+          </td>
+          <td class="font-mono text-muted" style="font-size:11px">
+            {% if r.exit_code is not none %}
+              <span style="color: {% if r.exit_code == 0 %}#3fb950{% else %}#f85149{% endif %}">
+                {{ r.exit_code }}
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <a href="{{ url_for('ansible_run_detail', rid=r.id) }}"
+                 class="btn btn-outline btn-sm">Log</a>
+              {% if r.status == 'running' %}
+              <form action="{{ url_for('ansible_run_cancel', rid=r.id) }}" method="post"
+                    style="display:inline">
+                <button class="btn btn-warning btn-sm">⊘ Durdur</button>
+              </form>
+              {% endif %}
+              <button onclick="openConfirm('Çalışmayı Sil',
+                'Çalışma #{{ r.id }} ve log kaydı silinecek.',
+                'del-run-{{ r.id }}')"
+                class="btn btn-danger btn-sm">Sil</button>
+              <form id="del-run-{{ r.id }}"
+                action="{{ url_for('ansible_run_delete', rid=r.id) }}"
+                method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <p>Henüz çalışma kaydı yok.</p>
+      <a href="{{ url_for('ansible_playbooks') }}" class="btn btn-primary btn-sm">
+        Playbook Çalıştır
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Çalışan iş varsa otomatik yenile
+{% set running_count = runs | selectattr('status', 'equalto', 'running') | list | length %}
+{% if running_count > 0 %}
+setTimeout(() => location.reload(), 4000);
+{% endif %}
+</script>
+{% endblock %}

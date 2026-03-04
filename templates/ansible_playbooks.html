@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Playbooklar{% endblock %}
+{% block topbar_title %}📋 Ansible Playbooklar{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_playbook_add') }}" class="btn btn-primary btn-sm">➕ Yeni Playbook</a>
+  <a href="{{ url_for('ansible_dashboard') }}" class="btn btn-secondary btn-sm">← Dashboard</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Playbook Listesi
+    <span class="badge badge-secondary">{{ playbooks|length }}</span>
+  </div>
+  <div class="table-wrap">
+    {% if playbooks %}
+    <table>
+      <thead>
+        <tr><th>Ad</th><th>Açıklama</th><th>Etiketler</th><th>Son Çalışma</th><th>İşlem</th></tr>
+      </thead>
+      <tbody>
+        {% for pb in playbooks %}
+        {% set lr = last_runs.get(pb.id) %}
+        <tr>
+          <td>
+            <a href="{{ url_for('ansible_playbook_edit', pid=pb.id) }}" class="link fw-bold">{{ pb.name }}</a>
+            <div class="text-muted" style="font-size:10px">{{ pb.updated_at[:16] }}</div>
+          </td>
+          <td class="text-muted" style="font-size:12px">{{ pb.description or '—' }}</td>
+          <td>
+            {% for tag in (pb.tags or '').split(',') %}
+              {% if tag.strip() %}
+                <span class="badge badge-secondary" style="font-size:10px">{{ tag.strip() }}</span>
+              {% endif %}
+            {% endfor %}
+          </td>
+          <td>
+            {% if lr %}
+              {% if lr.status == 'success' %}<span class="badge badge-success">✓</span>
+              {% elif lr.status == 'failed' %}<span class="badge badge-danger">✗</span>
+              {% elif lr.status == 'running' %}<span class="badge badge-warning">⟳</span>
+              {% else %}<span class="badge badge-secondary">{{ lr.status }}</span>{% endif %}
+              <span class="text-muted" style="font-size:11px">{{ lr.started_at[:10] if lr.started_at else '' }}</span>
+            {% else %}
+              <span class="text-muted" style="font-size:11px">Hiç çalıştırılmadı</span>
+            {% endif %}
+          </td>
+          <td class="td-nowrap">
+            <div class="btn-group">
+              <a href="{{ url_for('ansible_playbook_run', pid=pb.id) }}"
+                 class="btn btn-success btn-sm">▶ Çalıştır</a>
+              <a href="{{ url_for('ansible_playbook_edit', pid=pb.id) }}"
+                 class="btn btn-secondary btn-sm">Düzenle</a>
+              <button onclick="openConfirm('Playbook Sil','{{ pb.name }} silinecek!','dp-{{ pb.id }}')"
+                class="btn btn-danger btn-sm">Sil</button>
+              <form id="dp-{{ pb.id }}" action="{{ url_for('ansible_playbook_delete', pid=pb.id) }}"
+                method="post" style="display:none"></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <p>Henüz playbook yok.</p>
+      <a href="{{ url_for('ansible_playbook_add') }}" class="btn btn-primary">➕ İlk Playbook'u Oluştur</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

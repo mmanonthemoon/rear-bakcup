@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Ansible Gruplar{% endblock %}
+{% block topbar_title %}📁 Ansible Gruplar{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ansible_dashboard') }}" class="btn btn-secondary btn-sm">← Dashboard</a>
+{% endblock %}
+{% block content %}
+<div class="grid-2">
+
+<!-- Sol: Grup listesi -->
+<div class="card">
+  <div class="card-header">Gruplar <span class="badge badge-secondary">{{ groups|length }}</span></div>
+  <div class="table-wrap">
+    {% if groups %}
+    <table>
+      <thead><tr><th>Ad</th><th>Açıklama</th><th>Host Sayısı</th><th>İşlem</th></tr></thead>
+      <tbody>
+        {% for g in groups %}
+        <tr>
+          <td class="fw-bold">{{ g.name }}</td>
+          <td class="text-muted" style="font-size:12px">{{ g.description or '—' }}</td>
+          <td><span class="badge badge-info">{{ hcounts.get(g.id,0) }} host</span></td>
+          <td class="td-nowrap">
+            <button onclick="editGroupVars({{ g.id }}, '{{ g.name }}', {{ g.vars_yaml|tojson }})"
+              class="btn btn-outline btn-sm">Vars</button>
+            <button onclick="openConfirm('Grup Sil','{{ g.name }} ve host atamaları silinecek!','dg-{{ g.id }}')"
+              class="btn btn-danger btn-sm">Sil</button>
+            <form id="dg-{{ g.id }}" action="{{ url_for('ansible_groups') }}" method="post" style="display:none">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="gid" value="{{ g.id }}">
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="padding:30px">
+      <div class="empty-icon">📁</div><p>Henüz grup yok.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Sağ: Grup ekle + Vars editörü -->
+<div>
+<div class="card">
+  <div class="card-header">➕ Yeni Grup</div>
+  <div class="card-body">
+    <form method="post">
+      <input type="hidden" name="action" value="add">
+      <div class="form-group">
+        <label>Grup Adı <span class="req">*</span></label>
+        <input type="text" name="name" class="form-control" placeholder="ör: linux, windows, webservers">
+      </div>
+      <div class="form-group">
+        <label>Açıklama</label>
+        <input type="text" name="description" class="form-control" placeholder="Bu grubun amacı...">
+      </div>
+      <button type="submit" class="btn btn-primary">Ekle</button>
+    </form>
+  </div>
+</div>
+
+<div class="card" id="varsCard" style="display:none">
+  <div class="card-header" id="varsCardTitle">Group Vars</div>
+  <div class="card-body">
+    <form method="post" id="varsForm">
+      <input type="hidden" name="action" value="save_vars">
+      <input type="hidden" name="gid" id="varsGid" value="">
+      <div class="form-group">
+        <label>group_vars YAML</label>
+        <textarea name="vars_yaml" id="varsYaml" class="form-control code-area" rows="8"
+          placeholder="# Grup değişkenleri&#10;ansible_python_interpreter: /usr/bin/python3"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Kaydet</button>
+      <button type="button" onclick="document.getElementById('varsCard').style.display='none'"
+        class="btn btn-secondary">Kapat</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">📖 Grup Yapısı Hakkında</div>
+  <div class="card-body" style="font-size:12px;color:#8b949e;line-height:1.8">
+    <p>Gruplar Ansible inventory'sinde mantıksal host kümeleri oluşturur.</p>
+    <p>Tipik gruplar: <code>linux</code>, <code>windows</code>, <code>webservers</code>, <code>dbservers</code>, <code>production</code></p>
+    <p>Playbook'ta grup adıyla hedefleyebilirsiniz:<br>
+    <code style="background:#0d1117;padding:2px 6px;border-radius:3px">hosts: webservers</code></p>
+  </div>
+</div>
+</div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function editGroupVars(gid, gname, vars) {
+  document.getElementById('varsCard').style.display = 'block';
+  document.getElementById('varsCardTitle').textContent = '📝 ' + gname + ' — group_vars';
+  document.getElementById('varsGid').value = gid;
+  document.getElementById('varsYaml').value = vars || '';
+  document.getElementById('varsCard').scrollIntoView({behavior:'smooth'});
+}
+</script>
+{% endblock %}

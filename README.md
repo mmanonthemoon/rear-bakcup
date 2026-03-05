@@ -166,9 +166,11 @@ SQLite (rear_manager.db)
 - Toplu sunucu import (CSV veya metin yapıştırma)
 - **Ubuntu offline paket kurulumu** — internet olmadan .deb ile kurulum
 - ReaR yapılandırma (NFS URL, OUTPUT, BACKUP, AUTORESIZE, hariç dizinler)
+- **Otomatik yapılandırma** — sunucu eklendiğinde global ayarlardan varsayılan ReaR config otomatik uygulanır
+- **Otomatik NFS dizin oluşturma** — `rear mkbackup` öncesi hedef dizin yoksa otomatik oluşturulur
 - Yedekleme başlatma ve canlı log izleme
 - Zamanlayıcı (cron tarzı — dakika/saat/gün/ay/haftanın günü)
-- Yedekleme geçmişi ve dosya listesi
+- Yedekleme geçmişi ve dosya listesi (gerçek boyut hesaplama `du -sb` ile)
 
 ### Ansible Modülü
 - **Linux host**: SSH + become (sudo/su, aynı/farklı şifre)
@@ -791,3 +793,18 @@ journalctl -u rear-manager -n 100 --no-pager
 | Zamanlayıcı | ✅ Tam işlevsel |
 
 **Test Kapsamı:** 29 sayfa tam render testi, 37 fonksiyonel unit test — tamamı başarılı.
+
+---
+
+## Değişiklik Günlüğü
+
+### v2.1 (Son Güncellemeler)
+
+#### Yeni Özellikler
+- **Otomatik ReaR Yapılandırma:** Sunucu eklendiğinde `Yapılandır` butonuna basmaya gerek kalmadan, global ayarlardan varsayılan `/etc/rear/local.conf` içeriği üretilir ve arka planda configure job otomatik başlatılır. Kullanıcı dilerse değişiklik yapıp `Yapılandır` butonuyla yeniden uygulayabilir.
+- **Otomatik NFS Hedef Dizini:** `rear mkbackup` çalıştırılmadan önce NFS sunucusundaki hedef dizin (`/srv/rear-backups/<hostname>`) yoksa otomatik oluşturulur; "No such file or directory" hatası giderildi.
+
+#### Hata Düzeltmeleri
+- **Log izleme göstergesi:** İş tamamlandığında "Canlı izleniyor..." spinner'ı DOM'dan kaldırılarak "✓ Tamamlandı" olarak güncelleniyor.
+- **Yedek boyutu hesaplama:** Alt dizinler için `os.stat().st_size` yerine `du -sb` kullanılarak gerçek dosya boyutu doğru gösteriliyor (önceden 0.0 MB görünüyordu).
+- Çeşitli SSH bağlantısı, become yetkilendirmesi ve UI hataları giderildi (toplam 12 düzeltme).

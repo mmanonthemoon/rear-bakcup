@@ -1617,13 +1617,21 @@ def _do_backup(job_id, server_dict, backup_cmd='mkbackup', triggered_by='manual'
     log(f"► NFS Yol     : {cfg.get('nfs_export_path', BACKUP_ROOT)}/{server_dict['hostname']}")
     log("")
 
+    hostname   = server_dict['hostname']
+    backup_dir = os.path.join(BACKUP_ROOT, hostname)
+
+    # NFS hedef dizinini rear çalışmadan önce oluştur
+    try:
+        os.makedirs(backup_dir, exist_ok=True)
+        os.chmod(backup_dir, 0o755)
+        log(f"► NFS dizini hazırlandı: {backup_dir}")
+    except OSError as e:
+        log(f"[UYARI] NFS dizini oluşturulamadı: {e}")
+
     log(f"► rear -v {backup_cmd} çalıştırılıyor (bu uzun sürebilir)...")
     log("─" * 60)
     ec, _ = ssh_exec_stream(server_dict, f'rear -v {backup_cmd} 2>&1', log)
     log("─" * 60)
-
-    hostname   = server_dict['hostname']
-    backup_dir = os.path.join(BACKUP_ROOT, hostname)
     status     = 'success' if ec == 0 else 'failed'
 
     size_str = '-'

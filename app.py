@@ -127,6 +127,22 @@ def _cron_describe(minute, hour, dom, month, dow):
 app.jinja_env.globals['_cron_describe'] = _cron_describe
 
 
+def _safe_dirname(hostname):
+    """
+    Hostname'i güvenli bir dizin adına dönüştürür.
+    Nokta ve özel karakterleri kaldırır/değiştirir.
+    Örnek: 'web01.example.com' → 'web01-example-com'
+             '192.168.1.49'    → '192-168-1-49'
+    """
+    safe = re.sub(r'[^a-zA-Z0-9_-]', lambda m: '-' if m.group() == '.' else '', hostname)
+    safe = re.sub(r'-{2,}', '-', safe)
+    safe = safe.strip('-')
+    return safe or hostname
+
+
+app.jinja_env.globals['_safe_dirname']  = _safe_dirname
+
+
 @app.template_filter('calc_duration')
 def calc_duration_filter(started_at, finished_at):
     """İki tarih string'i arasındaki süreyi insan okunabilir formatta döner."""
@@ -607,15 +623,16 @@ def _get_local_ip():
     return '127.0.0.1'
 
 
+
 def get_nfs_target(hostname):
     """
     Yapılandırmaya göre NFS backup URL'ini döner.
-    nfs://<central_ip><nfs_export_path>/<hostname>
+    nfs://<central_ip><nfs_export_path>/<safe_dirname>
     """
     cfg  = get_settings()
     ip   = cfg.get('central_ip', _get_local_ip()).strip() or _get_local_ip()
     path = cfg.get('nfs_export_path', BACKUP_ROOT).strip() or BACKUP_ROOT
-    return f"nfs://{ip}{path}/{hostname}"
+    return f"nfs://{ip}{path}/{_safe_dirname(hostname)}"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1618,11 +1635,11 @@ def _do_backup(job_id, server_dict, backup_cmd='mkbackup', triggered_by='manual'
     cfg = get_settings()
     nfs_ip = cfg.get('central_ip', _get_local_ip())
     log(f"► Yedek Sunucu: {nfs_ip}")
-    log(f"► Yedek Yolu  : {cfg.get('nfs_export_path', BACKUP_ROOT)}/{server_dict['hostname']}")
+    log(f"► Yedek Yolu  : {cfg.get('nfs_export_path', BACKUP_ROOT)}/{_safe_dirname(server_dict['hostname'])}")
     log("")
 
     hostname   = server_dict['hostname']
-    backup_dir = os.path.join(BACKUP_ROOT, hostname)
+    backup_dir = os.path.join(BACKUP_ROOT, _safe_dirname(hostname))
 
     # NFS hedef dizinini rear çalışmadan önce oluştur
     try:
@@ -1710,6 +1727,9 @@ def _scheduler_run_backup(schedule_id):
     server = conn.execute('SELECT * FROM servers WHERE id=?', (sched['server_id'],)).fetchone()
     conn.close()
     if not server:
+        return
+    if not server['rear_installed'] or not server['rear_configured']:
+        # ReaR hazır değil, zamanlanmış yedekleme atlandı
         return
 
     job_id = create_job(server['id'], 'backup', triggered_by='scheduler', schedule_id=schedule_id)
@@ -1886,7 +1906,7 @@ def dashboard():
 
     backup_info = {}
     for s in servers:
-        d = os.path.join(BACKUP_ROOT, s['hostname'])
+        d = os.path.join(BACKUP_ROOT, _safe_dirname(s['hostname']))
         if os.path.isdir(d):
             try:
                 r = subprocess.run(['du', '-sh', d], capture_output=True, text=True)
@@ -2204,7 +2224,7 @@ def server_detail(sid):
 
     conn.close()
 
-    backup_dir = os.path.join(BACKUP_ROOT, server['hostname'])
+    backup_dir = os.path.join(BACKUP_ROOT, _safe_dirname(server['hostname']))
     backup_files = []
     if os.path.isdir(backup_dir):
         for fname in sorted(os.listdir(backup_dir), reverse=True):
@@ -2289,7 +2309,13 @@ def server_ansible_auto_add(sid):
         return redirect(url_for('server_detail', sid=sid))
 
     # Yeni Ansible host oluştur
-    host_name = server['hostname'].split('.')[0]  # kısa isim
+    # IP adresi girilmişse (örn: 192.168.1.49) noktaları tire ile değiştir,
+    # FQDN girilmişse (örn: web01.example.com) kısa ismi al.
+    _hn = server['hostname']
+    if all(p.isdigit() for p in _hn.split('.') if p):
+        host_name = _hn.replace('.', '-')   # 192.168.1.49 → 192-168-1-49
+    else:
+        host_name = _hn.split('.')[0]       # web01.example.com → web01
 
     # İsim çakışması varsa suffix ekle
     taken = conn.execute(
@@ -2435,6 +2461,10 @@ def server_configure(sid):
     settings = get_settings()
 
     if request.method == 'POST':
+        if not server['rear_installed']:
+            flash('ReaR kurulu değil. Önce ReaR kurulumunu tamamlayın.', 'warning')
+            return redirect(url_for('server_detail', sid=sid))
+
         cfg = dict(settings)
         cfg['autoresize']    = request.form.get('autoresize', '0')
         cfg['migration_mode']= request.form.get('migration_mode', '0')
@@ -2471,6 +2501,13 @@ def server_backup(sid):
     if not server:
         flash('Sunucu bulunamadı.', 'danger')
         return redirect(url_for('servers_list'))
+
+    if not server['rear_installed']:
+        flash('ReaR kurulu değil. Önce ReaR kurulumunu tamamlayın.', 'warning')
+        return redirect(url_for('server_detail', sid=sid))
+    if not server['rear_configured']:
+        flash('ReaR yapılandırılmamış. Önce yapılandırma uygulayın.', 'warning')
+        return redirect(url_for('server_detail', sid=sid))
 
     btype  = request.form.get('backup_type', 'mkbackup')
     job_id = create_job(sid, 'backup', triggered_by='manual')
@@ -2569,6 +2606,12 @@ def schedule_run_now(scid):
     if not sched or not server:
         flash('Bulunamadı.', 'danger')
         return redirect(url_for('servers_list'))
+    if not server['rear_installed']:
+        flash('ReaR kurulu değil. Önce ReaR kurulumunu tamamlayın.', 'warning')
+        return redirect(url_for('server_detail', sid=server['id']))
+    if not server['rear_configured']:
+        flash('ReaR yapılandırılmamış. Önce yapılandırma uygulayın.', 'warning')
+        return redirect(url_for('server_detail', sid=server['id']))
     job_id = create_job(server['id'], 'backup', triggered_by='manual-schedule', schedule_id=scid)
     start_job_thread(_do_backup, job_id, dict(server),
                      sched['backup_type'] or 'mkbackup', 'manual-schedule', scid)

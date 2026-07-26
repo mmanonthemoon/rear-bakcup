@@ -1,4 +1,4 @@
-# ReaR Manager v2.2
+# ReaR Manager v2.3
 ### Merkezi Yedekleme ve Ansible Yönetim Paneli
 
 > **Tamamen Offline Çalışır** — İnternet gerektirmez. Tek sunucu, tek süreç, sıfır dış bağımlılık.
@@ -25,7 +25,7 @@
 
 ## Genel Bakış
 
-ReaR Manager v2.0, ağ üzerindeki Linux ve Windows sunucularına **merkezi** olarak:
+ReaR Manager v2.3, ağ üzerindeki Linux ve Windows sunucularına **merkezi** olarak:
 - **ReaR (Relax-and-Recover)** tabanlı bare-metal yedekleme yönetimi
 - **Ansible** otomasyon ve yapılandırma yönetimi
 
@@ -116,13 +116,13 @@ SQLite (rear_manager.db)
 ```
 /opt/rear-manager/
 │
-├── app.py                      ← Ana uygulama (~4500+ satır, tüm route + iş mantığı)
+├── app.py                      ← Ana uygulama (~4300+ satır, tüm route + iş mantığı)
 ├── rear_manager.db             ← SQLite veritabanı (otomatik oluşur)
 ├── install.sh                  ← Otomatik kurulum betiği
 ├── prepare_offline_packages.sh ← Ubuntu offline paket hazırlama
 ├── requirements.txt            ← Python bağımlılıkları
 │
-├── templates/                  ← Jinja2 HTML şablonları (25 dosya)
+├── templates/                  ← Jinja2 HTML şablonları (26 dosya)
 │   ├── base.html               ← Ana layout (sidebar, topbar, modal, CSS)
 │   ├── dashboard.html
 │   ├── servers.html / server_detail.html / server_form.html
@@ -166,7 +166,7 @@ SQLite (rear_manager.db)
 - Toplu sunucu import (CSV veya metin yapıştırma)
 - **Ubuntu offline paket kurulumu** — internet olmadan .deb ile kurulum
 - ReaR yapılandırma (NFS URL, OUTPUT, BACKUP, AUTORESIZE, hariç dizinler)
-- **Otomatik yapılandırma** — sunucu eklendiğinde global ayarlardan varsayılan ReaR config otomatik uygulanır
+- **Yapılandırma** — Sunucu eklendikten sonra önce ReaR kurulur, ardından global ayarlardan varsayılan ReaR config uygulanır
 - **Otomatik NFS dizin oluşturma** — `rear mkbackup` öncesi hedef dizin yoksa otomatik oluşturulur
 - Yedekleme başlatma ve canlı log izleme
 - Zamanlayıcı (cron tarzı — dakika/saat/gün/ay/haftanın günü)
@@ -267,7 +267,7 @@ journalctl -u rear-manager -f
 
 Beklenen çıktı:
 ```
-ReaR Manager v2.2 - Merkezi Yedekleme Yönetim Paneli
+ReaR Manager v2.3 - Merkezi Yedekleme Yönetim Paneli
 Adres     : http://0.0.0.0:80
 DB        : /opt/rear-manager/rear_manager.db
 Yedekler  : /srv/rear-backups
@@ -322,7 +322,7 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/rear_manager_rsa -N "" -C "rear-manager"
 # 7. Servisi oluştur
 sudo tee /etc/systemd/system/rear-manager.service > /dev/null <<EOF
 [Unit]
-Description=ReaR Manager v2.2
+Description=ReaR Manager v2.3
 After=network.target
 
 [Service]
@@ -349,7 +349,7 @@ sudo systemctl start rear-manager
 
 ### 1. Şifre Değiştirme
 
-`http://<ip>:5000` → Sol menü → **Şifre Değiştir**
+`http://<ip>` → Sol menü → **Şifre Değiştir**
 
 ### 2. Yedek Dizini Yapılandırması
 
@@ -385,7 +385,7 @@ Become:        sudo → root
 Become Şifresi: SSH şifresi ile aynı ✓
 ```
 
-→ **Kaydet** → **Bağlantı Testi** → **ReaR Kur** → (ReaR kurulunca) **Yapılandır** → (Yapılandırma sonrası) **Yedekle**
+→ **Kaydet** → **Bağlantı Testi** → **ReaR Kur** → (Kurulum tamamlanınca) **Yapılandır** → (Yapılandırma sonrası) **Yedekle**
 
 ---
 
@@ -810,7 +810,7 @@ journalctl -u rear-manager -n 100 --no-pager
 
 ---
 
-## Versiyon Bilgisi
+## Versiyon Bilgisi (v2.3)
 
 | Modül | Durum |
 |-------|-------|
@@ -828,7 +828,15 @@ journalctl -u rear-manager -n 100 --no-pager
 
 ## Değişiklik Günlüğü
 
-### v2.2 (Son Güncellemeler)
+### v2.3 (Son Güncellemeler)
+
+#### Hata Düzeltmeleri
+- **ReaR kurulum kontrolü (Yapılandırma):** `_run_configure_rear` artık `which rear` ile önce kurulum kontrolü yapar; ReaR kurulu değilse işlemi hata ile sonlandırır ve kullanıcıya önce ReaR kurmasını bildirir.
+- **Sunucu ekleme akışı:** Yeni sunucu eklendiğinde artık otomatik yapılandırma başlatılmaz. Kullanıcı, sunucu detay sayfasına yönlendirilerek sırayla "ReaR Kur → Yapılandır" adımlarını takip eder.
+- **Ansible otomatik ekleme hostname düzeltmesi:** IP adresi tespiti artık `ip_address` alanından güvenilir regex ile yapılır. `192.168.1.49` → `192-168-1-49` (eskiden `192` olarak kesiliyordu).
+- **Versiyon takibi:** `APP_VERSION` sabiti eklendi; uygulama başlatma mesajı, config başlığı ve sidebar otomatik olarak güncellenen versiyonu gösterir.
+
+### v2.2 (Önceki Güncellemeler)
 
 #### Yeni Özellikler
 - **NFS kurulumu kaldırıldı:** NFS/SMB yapılandırması artık arayüzden yapılmıyor; Linux sunucusunda kendiniz yapılandırırsınız. Ayarlar → Genel'den yalnızca Yedek Sunucu IP ve Yedek Dizini girilir.

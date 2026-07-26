@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ReaR Manager v2.0 - Merkezi ReaR Yedekleme Yönetim Paneli
+ReaR Manager v2.3 - Merkezi ReaR Yedekleme Yönetim Paneli
 Özellikler:
   - Çoklu hedef sunucu yönetimi (SSH)
   - Ayrı/merkezi NFS sunucusu seçeneği
@@ -49,6 +49,8 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────
 # SABITLER VE UYGULAMA
 # ─────────────────────────────────────────────────────────────
+APP_VERSION = 'v2.3'
+
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 DB_PATH     = os.path.join(BASE_DIR, 'rear_manager.db')
 BACKUP_ROOT = '/srv/rear-backups'
@@ -79,6 +81,11 @@ app.secret_key = secrets.token_hex(32)
 _running_jobs = {}
 _job_lock     = threading.Lock()
 _scheduler    = None
+
+
+@app.context_processor
+def inject_version():
+    return {'app_version': APP_VERSION}
 
 
 def _cron_describe(minute, hour, dom, month, dow):
@@ -1323,7 +1330,7 @@ def generate_rear_config(server, cfg, extra_server_exclude=''):
                 all_excludes.append(line)
 
     lines = [
-        "# ReaR Yapılandırması - ReaR Manager v2.0 tarafından oluşturuldu",
+        f"# ReaR Yapılandırması - ReaR Manager {APP_VERSION} tarafından oluşturuldu",
         f"# Sunucu  : {server['hostname']}",
         f"# Tarih   : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}",
         "",
@@ -1592,6 +1599,15 @@ def _run_configure_rear(job_id, server_dict, rear_config_content):
     conn.commit(); conn.close()
 
     log("=== ReaR Yapılandırması Başlıyor ===")
+
+    # Önce ReaR kurulu mu kontrol et
+    log("► ReaR kurulum durumu kontrol ediliyor...")
+    ec_chk, _ = ssh_exec_stream(server_dict, 'which rear 2>/dev/null || command -v rear 2>/dev/null', log)
+    if ec_chk != 0:
+        log("[HATA] ReaR bu sunucuda kurulu değil!")
+        log("[BİLGİ] Önce 'ReaR Kur' butonuna basarak ReaR'ı kurun, ardından yapılandırın.")
+        _set_job_status(job_id, 'failed'); return
+
     ssh_exec_stream(server_dict, 'mkdir -p /etc/rear', log)
     ssh_exec_stream(server_dict,
         'test -f /etc/rear/local.conf && '
@@ -1985,15 +2001,8 @@ def server_add():
         server_row = conn.execute('SELECT * FROM servers WHERE id=?', (new_sid,)).fetchone()
         conn.close()
 
-        # Sunucu eklenince varsayılan ayarlarla /etc/rear/local.conf otomatik oluştur
-        settings = get_settings()
-        srv_dict = dict(server_row)
-        content = generate_rear_config(srv_dict, settings)
-        job_id = create_job(new_sid, 'configure', triggered_by='auto')
-        start_job_thread(_run_configure_rear, job_id, srv_dict, content)
-
-        flash(f'Sunucu "{label}" eklendi. Varsayılan ReaR yapılandırması uygulanıyor...', 'success')
-        return redirect(url_for('job_detail', jid=job_id))
+        flash(f'Sunucu "{label}" eklendi. Önce ReaR Kur, ardından Yapılandır adımlarını uygulayın.', 'success')
+        return redirect(url_for('server_detail', sid=new_sid))
     cfg = get_settings()
     return render_template('server_form.html', server=None, title='Sunucu Ekle', cfg=cfg)
 
@@ -2309,13 +2318,19 @@ def server_ansible_auto_add(sid):
         return redirect(url_for('server_detail', sid=sid))
 
     # Yeni Ansible host oluştur
-    # IP adresi girilmişse (örn: 192.168.1.49) noktaları tire ile değiştir,
+    # IP adresi hostname olarak kullanıldıysa (veya ip_address) noktaları tire ile değiştir,
     # FQDN girilmişse (örn: web01.example.com) kısa ismi al.
-    _hn = server['hostname']
-    if all(p.isdigit() for p in _hn.split('.') if p):
-        host_name = _hn.replace('.', '-')   # 192.168.1.49 → 192-168-1-49
-    else:
+    # ip_address her zaman güvenilir bir IP olduğundan önce onu kontrol et.
+    _ip = (server['ip_address'] or '').strip()
+    _hn = (server['hostname'] or '').strip()
+    if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', _ip):
+        host_name = _ip.replace('.', '-')   # 192.168.1.49 → 192-168-1-49
+    elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', _hn):
+        host_name = _hn.replace('.', '-')   # hostname de IP ise
+    elif '.' in _hn:
         host_name = _hn.split('.')[0]       # web01.example.com → web01
+    else:
+        host_name = _hn or _ip.replace('.', '-')
 
     # İsim çakışması varsa suffix ekle
     taken = conn.execute(
@@ -4231,7 +4246,7 @@ if __name__ == '__main__':
     init_scheduler()
 
     print("=" * 64)
-    print("  ReaR Manager v2.0 - Merkezi Yedekleme Yönetim Paneli")
+    print(f"  ReaR Manager {APP_VERSION} - Merkezi Yedekleme Yönetim Paneli")
     print(f"  Adres     : http://0.0.0.0:80")
     print(f"  DB        : {DB_PATH}")
     print(f"  Yedekler  : {BACKUP_ROOT}")

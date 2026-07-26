@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ════════════════════════════════════════════════════════════════
-# ReaR Manager v2.0 + Ansible Modülü - Kurulum Betiği
+# ReaR Manager v2.3 + Ansible Modülü - Kurulum Betiği
 # Çalıştırma: sudo bash install.sh
 # ════════════════════════════════════════════════════════════════
 set -e
@@ -9,7 +9,7 @@ INSTALL_DIR="/opt/rear-manager"
 VENV_DIR="${INSTALL_DIR}/venv"
 SERVICE_FILE="/etc/systemd/system/rear-manager.service"
 BACKUP_ROOT="/srv/rear-backups"
-APP_PORT=5000
+APP_PORT=80
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -22,7 +22,7 @@ err()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${CYAN}  ReaR Manager v2.0 + Ansible Modülü                       ${NC}"
+echo -e "${CYAN}  ReaR Manager v2.3 + Ansible Modülü                       ${NC}"
 echo -e "${CYAN}  Kurulum Başlıyor...                                       ${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
@@ -173,7 +173,7 @@ fi
 
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
-Description=ReaR Manager v2.0 - Yedekleme ve Ansible Yonetim Paneli
+Description=ReaR Manager v2.3 - Yedekleme ve Ansible Yonetim Paneli
 After=network.target
 
 [Service]
@@ -211,10 +211,10 @@ SERVER_IP=$(hostname -I | awk '{print $1}')
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  ✓ ReaR Manager v2.0 Kurulumu Tamamlandı!                 ${NC}"
+echo -e "${GREEN}  ✓ ReaR Manager v2.3 Kurulumu Tamamlandı!                 ${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  🌐 Web Panel   : ${CYAN}http://${SERVER_IP}:${APP_PORT}${NC}"
+echo -e "  🌐 Web Panel   : ${CYAN}http://${SERVER_IP}${NC}"
 echo -e "  👤 Kullanıcı   : ${CYAN}admin${NC}"
 echo -e "  🔒 Şifre       : ${CYAN}admin123${NC}  ${YELLOW}← Lütfen değiştirin!${NC}"
 echo ""
@@ -228,9 +228,9 @@ echo -e "    ${YELLOW}systemctl status rear-manager${NC}"
 echo -e "    ${YELLOW}journalctl -u rear-manager -f${NC}"
 echo ""
 echo -e "${CYAN}─── İlk Kurulum Adımları ──────────────────────────────────${NC}"
-echo -e "  1. ${CYAN}http://${SERVER_IP}:${APP_PORT}${NC} → admin/admin123"
+echo -e "  1. ${CYAN}http://${SERVER_IP}${NC} → admin/admin123"
 echo -e "  2. Şifre Değiştir (sol menü)"
-echo -e "  3. Ayarlar → NFS Modunu seç → NFS Kur"
+echo -e "  3. Ayarlar → Genel sekmesinden Yedek Sunucu IP ve Dizini ayarla"
 echo -e "  4. Sunucu Ekle → ReaR Kur → Yapılandır → Yedekle"
 echo ""
 echo -e "${CYAN}─── Ansible Modülü Adımları ───────────────────────────────${NC}"
